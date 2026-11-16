@@ -128,17 +128,7 @@ class Dock extends StatelessWidget {
             if (kind == PageKind.playlist || kind == PageKind.album) sel = 3;
             const itemH = 58.0;
             return Column(children: [
-              const SizedBox(height: 16),
-              Tooltip(
-                message: 'Mono',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset('assets/icon.png', width: 46, height: 46),
-                ),
-              ),
               const SizedBox(height: 18),
-              Container(width: 28, height: 1, color: Colors.white.withValues(alpha: 0.12)),
-              const SizedBox(height: 14),
               SizedBox(
                 height: itemH * items.length,
                 child: Stack(children: [
