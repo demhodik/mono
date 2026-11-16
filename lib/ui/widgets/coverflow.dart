@@ -145,9 +145,9 @@ class _CoverFlowState extends State<CoverFlow> with SingleTickerProviderStateMix
     final ad = d.abs();
     final sign = d.sign;
     // compress spacing for far cards
-    final x = sign * (ad <= 1 ? ad * s * 0.78 : s * 0.78 + (ad - 1) * s * 0.36);
-    final rot = -d.clamp(-1.0, 1.0) * 0.95;
-    final scale = 1 - math.min(ad, 3) * 0.10;
+    final x = sign * (ad <= 1 ? ad * s * 1.0 : s * 1.0 + (ad - 1) * s * 0.48);
+    final rot = -d.clamp(-1.0, 1.0) * 0.72;
+    final scale = 1 - math.min(ad, 3) * 0.08;
     final z = ad * 120;
     final opacity = (1 - (ad - 3).clamp(0, 1.5) / 1.5).clamp(0.0, 1.0);
     final item = widget.items[i];
