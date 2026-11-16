@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import '../api/models.dart';
 import '../state/app_state.dart';
 import '../state/player.dart';
+import 'lyrics.dart';
 import 'pages/pages.dart';
 import 'theme.dart';
 import 'widgets/background.dart';
@@ -449,12 +450,12 @@ class PlayerIsland extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 520),
           curve: Curves.easeOutBack,
-          width: has ? 860 : 340,
+          width: has ? 940 : 340,
           height: 80,
           child: GlassPanel(
             radius: 40,
             opacity: 0.09,
-            blur: 40,
+            blur: 24,
             child: Stack(children: [
               if (!has)
                 const Center(
@@ -539,6 +540,12 @@ class PlayerIsland extends StatelessWidget {
                         child: Slider(value: p.volume, min: 0, max: 100, onChanged: p.setVolume),
                       ),
                     ),
+                    HoverIcon(Icons.lyrics_rounded, size: 20, tooltip: 'Текст', onTap: () {
+                      app.setLyricsTab(true);
+                      app.setNowPlaying(true);
+                    }),
+                    HoverIcon(Icons.subtitles_rounded,
+                        size: 20, tooltip: 'Текст поверх игр (Ctrl+Shift+L)', onTap: app.overlay.enter),
                     HoverIcon(Icons.open_in_full_rounded,
                         size: 18, onTap: () => app.setNowPlaying(true), tooltip: 'Развернуть'),
                   ]),
@@ -610,7 +617,7 @@ class NowPlayingView extends StatelessWidget {
         final p = app.player;
         final t = p.current;
         if (t == null) return const SizedBox.shrink();
-        final upNext = p.queue.skip(p.index + 1).take(6).toList();
+        final upNext = p.queue.skip(p.index + 1).take(30).toList();
         return Stack(fit: StackFit.expand, children: [
           ColoredBox(
             color: Colors.black,
@@ -642,7 +649,7 @@ class NowPlayingView extends StatelessWidget {
                 size: 28, pad: 8, tooltip: 'Свернуть', onTap: () => app.setNowPlaying(false)),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(70, 80, 70, 50),
+            padding: const EdgeInsets.fromLTRB(70, 70, 70, 40),
             child: Row(children: [
               Expanded(
                 flex: 5,
@@ -671,61 +678,89 @@ class NowPlayingView extends StatelessWidget {
               const SizedBox(width: 40),
               Expanded(
                 flex: 6,
-                child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('СЕЙЧАС ИГРАЕТ',
-                          style: TextStyle(fontSize: 11, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 10),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 400),
-                        child: Column(
-                          key: ValueKey(t.id),
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(t.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontFamily: 'Unbounded', 
-                                    fontSize: 35.5, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.05)),
-                            const SizedBox(height: 10),
-                            Text(t.artists, style: const TextStyle(fontSize: 18, color: C.sub)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      const _BigProgress(),
-                      const SizedBox(height: 18),
-                      Row(children: [
-                        HoverIcon(Icons.shuffle_rounded, size: 24, active: p.shuffle, onTap: p.toggleShuffle),
-                        const SizedBox(width: 16),
-                        GlassButton.icon(Icons.skip_previous_rounded, size: 30, pad: 12, onTap: p.previous),
-                        const SizedBox(width: 16),
-                        GlassButton.icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            size: 40, pad: 18, active: true, onTap: p.toggle),
-                        const SizedBox(width: 16),
-                        GlassButton.icon(Icons.skip_next_rounded, size: 30, pad: 12, onTap: p.next),
-                        const SizedBox(width: 16),
-                        HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                            size: 24, active: p.repeat != Repeat.off, onTap: p.cycleRepeat),
-                        const SizedBox(width: 24),
-                        GlassButton.icon(app.isLiked(t) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            size: 24, pad: 12, onTap: () => app.toggleLike(t)),
-                      ]),
-                      if (upNext.isNotEmpty) ...[
-                        const SizedBox(height: 34),
-                        const Text('ДАЛЕЕ',
-                            style: TextStyle(fontSize: 11, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 10),
-                        for (var i = 0; i < upNext.length; i++)
-                          FadeSlideIn.index(
-                            i,
-                            key: ValueKey('${upNext[i].id}$i'),
-                            child: _UpNextRow(track: upNext[i], index: p.index + 1 + i),
-                          ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('СЕЙЧАС ИГРАЕТ',
+                      style: TextStyle(fontSize: 11, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    child: Column(
+                      key: ValueKey(t.id),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontFamily: 'Unbounded', fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.8, height: 1.1)),
+                        const SizedBox(height: 8),
+                        Text(t.artists, style: const TextStyle(fontSize: 17, color: C.sub)),
                       ],
-                    ]),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const _BigProgress(),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    HoverIcon(Icons.shuffle_rounded, size: 24, active: p.shuffle, onTap: p.toggleShuffle),
+                    const SizedBox(width: 14),
+                    GlassButton.icon(Icons.skip_previous_rounded, size: 28, pad: 11, onTap: p.previous),
+                    const SizedBox(width: 14),
+                    GlassButton.icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        size: 36, pad: 16, active: true, onTap: p.toggle),
+                    const SizedBox(width: 14),
+                    GlassButton.icon(Icons.skip_next_rounded, size: 28, pad: 11, onTap: p.next),
+                    const SizedBox(width: 14),
+                    HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+                        size: 24, active: p.repeat != Repeat.off, onTap: p.cycleRepeat),
+                    const Spacer(),
+                    GlassButton.icon(app.isLiked(t) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        size: 22, pad: 11, onTap: () => app.toggleLike(t)),
+                  ]),
+                  const SizedBox(height: 22),
+                  Row(children: [
+                    GlassButton(
+                      active: app.lyricsTab,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      onTap: () => app.setLyricsTab(true),
+                      child: const Text('Текст'),
+                    ),
+                    const SizedBox(width: 8),
+                    GlassButton(
+                      active: !app.lyricsTab,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      onTap: () => app.setLyricsTab(false),
+                      child: const Text('Далее'),
+                    ),
+                    const Spacer(),
+                    GlassButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      tooltip: 'Прозрачный текст поверх игры. Выход: Ctrl+Shift+L',
+                      onTap: app.overlay.enter,
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.subtitles_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Поверх игры'),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      child: app.lyricsTab
+                          ? LyricsView(key: ValueKey('ly${t.id}'), track: t)
+                          : ListView(key: const ValueKey('queue'), children: [
+                              for (var i = 0; i < upNext.length; i++)
+                                FadeSlideIn.index(
+                                  i,
+                                  key: ValueKey('${upNext[i].id}$i'),
+                                  child: _UpNextRow(track: upNext[i], index: p.index + 1 + i),
+                                ),
+                            ]),
+                    ),
+                  ),
+                ]),
               ),
             ]),
           ),

@@ -54,7 +54,7 @@ class _VinylState extends State<Vinyl> with SingleTickerProviderStateMixin {
         ),
         RotationTransition(
           turns: _c,
-          child: Stack(alignment: Alignment.center, children: [
+          child: RepaintBoundary(child: Stack(alignment: Alignment.center, children: [
             CustomPaint(size: Size(s, s), painter: _DiscPainter()),
             ClipOval(child: Cover(widget.cover, size: s * 0.38, radius: 0)),
             Container(
@@ -62,7 +62,7 @@ class _VinylState extends State<Vinyl> with SingleTickerProviderStateMixin {
               height: s * 0.035,
               decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF0A0A0A)),
             ),
-          ]),
+          ])),
         ),
         // static light reflection (does not rotate)
         IgnorePointer(child: CustomPaint(size: Size(s, s), painter: _SheenPainter())),

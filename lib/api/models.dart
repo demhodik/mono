@@ -20,6 +20,8 @@ class Track {
   final String? cover;
   final Duration duration;
   final bool available;
+  final bool hasSyncLyrics;
+  final bool hasLyrics;
 
   Track({
     required this.id,
@@ -29,6 +31,8 @@ class Track {
     this.cover,
     this.duration = Duration.zero,
     this.available = true,
+    this.hasSyncLyrics = false,
+    this.hasLyrics = false,
   });
 
   String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
@@ -55,6 +59,9 @@ class Track {
       cover: cover ?? j['ogImage']?.toString(),
       duration: Duration(milliseconds: (j['durationMs'] as num?)?.toInt() ?? 0),
       available: j['available'] != false,
+      hasSyncLyrics: j['lyricsInfo'] is Map && j['lyricsInfo']['hasAvailableSyncLyrics'] == true,
+      hasLyrics: j['lyricsInfo'] is Map &&
+          (j['lyricsInfo']['hasAvailableTextLyrics'] == true || j['lyricsInfo']['hasAvailableSyncLyrics'] == true),
     );
   }
 
@@ -124,4 +131,51 @@ class WaveSettings {
   String language; // any, russian, not-russian
 
   WaveSettings({this.mood = 'all', this.diversity = 'default', this.language = 'any'});
+}
+
+class LyricLine {
+  final Duration time;
+  final String text;
+  const LyricLine(this.time, this.text);
+}
+
+class Lyrics {
+  /// Time-synced lines (karaoke). Empty if only plain text exists.
+  final List<LyricLine> lines;
+  final String plain;
+  const Lyrics({this.lines = const [], this.plain = ''});
+  bool get synced => lines.isNotEmpty;
+  bool get isEmpty => lines.isEmpty && plain.trim().isEmpty;
+
+  static Lyrics parseLrc(String text) {
+    final out = <LyricLine>[];
+    final re = RegExp(r'\[(\d+):(\d+(?:[.,]\d+)?)\]');
+    for (final raw in text.split('\n')) {
+      final ms = re.allMatches(raw).toList();
+      if (ms.isEmpty) continue;
+      final words = raw.replaceAll(re, '').trim();
+      for (final m in ms) {
+        final min = int.parse(m.group(1)!);
+        final sec = double.parse(m.group(2)!.replaceAll(',', '.'));
+        out.add(LyricLine(Duration(milliseconds: ((min * 60 + sec) * 1000).round()), words));
+      }
+    }
+    out.sort((a, b) => a.time.compareTo(b.time));
+    return Lyrics(lines: out);
+  }
+
+  /// Index of the line active at [pos], or -1.
+  int indexAt(Duration pos) {
+    var lo = 0, hi = lines.length - 1, ans = -1;
+    while (lo <= hi) {
+      final mid = (lo + hi) >> 1;
+      if (lines[mid].time <= pos) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans;
+  }
 }

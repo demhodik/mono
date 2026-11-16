@@ -139,6 +139,45 @@ class YandexApi {
     return _tracks(tracks is Map ? tracks['results'] : null);
   }
 
+  Future<List<Playlist>> searchPlaylists(String text) async {
+    final r = await _get('/search', {'text': text, 'type': 'playlist', 'page': '0', 'nocorrect': 'false'});
+    final pl = r is Map ? r['playlists'] : null;
+    final res = pl is Map ? pl['results'] : null;
+    return (res is List ? res : const []).map(Playlist.fromJson).whereType<Playlist>().toList();
+  }
+
+  // ---------- lyrics ----------
+
+  static const _lyricsKey = 'p93jhgh689SBReK6ghtw62';
+  final _lyricsCache = <String, Lyrics>{};
+
+  Future<Lyrics> lyrics(String trackId) async {
+    final cached = _lyricsCache[trackId];
+    if (cached != null) return cached;
+    Future<Lyrics?> fetch(String format) async {
+      final ts = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
+      final sign = base64.encode(Hmac(sha256, utf8.encode(_lyricsKey)).convert(utf8.encode('$trackId$ts')).bytes);
+      try {
+        final r = await _get('/tracks/$trackId/lyrics', {'format': format, 'timeStamp': ts, 'sign': sign});
+        final url = r is Map ? r['downloadUrl']?.toString() : null;
+        if (url == null) return null;
+        final resp = await _client.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+        final text = utf8.decode(resp.bodyBytes);
+        if (format == 'LRC') {
+          final l = Lyrics.parseLrc(text);
+          return l.synced ? l : null;
+        }
+        return text.trim().isEmpty ? null : Lyrics(plain: text);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final result = await fetch('LRC') ?? await fetch('TEXT') ?? const Lyrics();
+    _lyricsCache[trackId] = result;
+    return result;
+  }
+
   // ---------- library ----------
 
   Future<List<String>> likedIds() async {

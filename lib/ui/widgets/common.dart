@@ -38,6 +38,8 @@ class Cover extends StatelessWidget {
               height: size,
               fit: BoxFit.cover,
               gaplessPlayback: true,
+              cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+              filterQuality: FilterQuality.medium,
               errorBuilder: (_, _, _) => ph,
               frameBuilder: (_, child, frame, sync) => AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
@@ -108,7 +110,7 @@ class MonoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(slivers: [
+    return SmoothScrollView(slivers: [
       SliverToBoxAdapter(child: header),
       ...slivers,
       const SliverToBoxAdapter(child: SizedBox(height: 140)),

@@ -3,7 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/models.dart';
 import '../api/yandex_api.dart';
+import 'overlay.dart';
 import 'player.dart';
+import 'vibe.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -21,6 +23,14 @@ class AppRoute {
 class AppState extends ChangeNotifier {
   YandexApi? api;
   late final PlayerController player = PlayerController(this);
+  final overlay = GameOverlay();
+
+  /// Now Playing right side: true = lyrics, false = queue.
+  bool lyricsTab = true;
+  void setLyricsTab(bool v) {
+    lyricsTab = v;
+    notifyListeners();
+  }
 
   bool ready = false;
   bool get loggedIn => api?.uid != null;
@@ -153,6 +163,59 @@ class AppState extends ChangeNotifier {
       like ? likedIds.remove(t.id) : likedIds.add(t.id);
       notifyListeners();
       toast('Не получилось: $e');
+    }
+  }
+
+  // ---------- подбор по вайбу ----------
+
+  String vibeText = '';
+  List<String> vibeTags = [];
+  bool vibeBusy = false;
+  Set<String>? _likedArtists;
+
+  Future<Set<String>> _loadLikedArtists() async {
+    if (_likedArtists != null) return _likedArtists!;
+    try {
+      final ids = (await api!.likedIds()).take(300).toList();
+      final tracks = await api!.tracksByIds(ids);
+      _likedArtists = {
+        for (final t in tracks)
+          for (final a in t.artists.toLowerCase().split(', '))
+            if (a.isNotEmpty) a,
+      };
+    } catch (_) {
+      _likedArtists = {};
+    }
+    return _likedArtists!;
+  }
+
+  /// Picks music for a free-text vibe and starts playing right away.
+  Future<void> vibe(String text) async {
+    final q = text.trim();
+    if (q.isEmpty) {
+      await startWave();
+      return;
+    }
+    if (vibeBusy) return;
+    vibeBusy = true;
+    vibeText = q;
+    final plan = VibeEngine.parse(q);
+    vibeTags = plan.tags;
+    notifyListeners();
+    try {
+      final liked = await _loadLikedArtists();
+      final tracks = await VibeEngine.build(api!, plan, liked);
+      if (tracks.isEmpty) {
+        toast('Ничего не нашлось под «$q», попробуй сказать иначе');
+      } else {
+        await player.playList(tracks, 0,
+            source: 'vibe', loadMore: (last) => api!.waveTracks(lastTrackId: last.id));
+      }
+    } catch (e) {
+      toast('Не получилось подобрать: $e');
+    } finally {
+      vibeBusy = false;
+      notifyListeners();
     }
   }
 

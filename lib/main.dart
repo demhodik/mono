@@ -1,12 +1,14 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'log.dart';
 import 'state/app_state.dart';
 import 'ui/intro.dart';
+import 'ui/lyrics.dart';
 import 'ui/login.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
@@ -22,6 +24,11 @@ Future<void> main() async {
   };
   MediaKit.ensureInitialized();
   await windowManager.ensureInitialized();
+  try {
+    await acrylic.Window.initialize();
+  } catch (e) {
+    Log.w('acrylic: $e');
+  }
 
   const options = WindowOptions(
     size: Size(1320, 840),
@@ -38,6 +45,7 @@ Future<void> main() async {
 
   app = AppState();
   app.boot();
+  app.overlay.init();
   runApp(const MonoApp());
 }
 
@@ -58,10 +66,22 @@ class _MonoAppState extends State<MonoApp> {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       scaffoldMessengerKey: scaffoldMessengerKey,
-      builder: (context, child) => Stack(children: [
-        child!,
-        if (_intro) IntroOverlay(onDone: () => setState(() => _intro = false)),
-      ]),
+      color: Colors.transparent,
+      builder: (context, child) => ListenableBuilder(
+        listenable: app.overlay,
+        builder: (context, _) {
+          final ov = app.overlay.active;
+          return Stack(children: [
+            Offstage(offstage: ov, child: TickerMode(enabled: !ov, child: child!)),
+            if (ov)
+              const Material(
+                type: MaterialType.transparency,
+                child: Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: OverlayLyrics())),
+              ),
+            if (_intro && !ov) IntroOverlay(onDone: () => setState(() => _intro = false)),
+          ]);
+        },
+      ),
       home: ListenableBuilder(
         listenable: app,
         builder: (context, _) {

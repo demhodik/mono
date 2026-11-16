@@ -42,6 +42,9 @@ dependencies:
   window_manager: ^0.5.1
   shared_preferences: ^2.5.6
   url_launcher: ^6.3.3
+  hotkey_manager: ^0.2.3
+  flutter_acrylic: ^1.1.4
+  screen_retriever: ^0.2.2
 
 dev_dependencies:
   flutter_test:

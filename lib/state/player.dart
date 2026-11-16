@@ -20,12 +20,19 @@ class PlayerController extends ChangeNotifier {
         playing = v;
         notifyListeners();
       }),
-      _player.stream.position.listen((p) => position.value = p),
+      _player.stream.position.listen((p) {
+        position.value = p;
+        // fallback end detection: some files never emit `completed`
+        final d = duration.value;
+        if (playing && !loading && d > const Duration(seconds: 2) && p >= d - const Duration(milliseconds: 350)) {
+          _onEnded();
+        }
+      }),
       _player.stream.duration.listen((d) {
         if (d > Duration.zero) duration.value = d;
       }),
       _player.stream.completed.listen((done) {
-        if (done) _onEnded();
+        if (done && !loading) _onEnded();
       }),
       _player.stream.error.listen((e) {
         if (e.isNotEmpty) debugPrint('player error: $e');
@@ -117,10 +124,15 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  int _endedFor = -1;
+
   void _onEnded() {
+    if (_endedFor == _request) return; // already handled for this track
+    _endedFor = _request;
     final t = current;
     if (t != null) app.onTrackFinished(t, source, duration.value);
     if (repeat == Repeat.one) {
+      _endedFor = -1;
       _player.seek(Duration.zero);
       _player.play();
       return;

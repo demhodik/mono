@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 /// Fades + slides a child in once, after an optional delay (for staggered lists).
@@ -206,4 +207,49 @@ class _EqPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_EqPainter o) => o.t != t || o.playing != playing;
+}
+
+/// CustomScrollView with buttery mouse-wheel scrolling (animated, eased).
+class SmoothScrollView extends StatefulWidget {
+  final List<Widget> slivers;
+  const SmoothScrollView({super.key, required this.slivers});
+
+  @override
+  State<SmoothScrollView> createState() => _SmoothScrollViewState();
+}
+
+class _SmoothScrollViewState extends State<SmoothScrollView> {
+  final _c = ScrollController();
+  double? _target;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _onSignal(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent || !_c.hasClients) return;
+    if (e.scrollDelta.dy == 0) return;
+    final pos = _c.position;
+    final base = (_target != null && _c.position.isScrollingNotifier.value) ? _target! : pos.pixels;
+    final t = (base + e.scrollDelta.dy * 1.15).clamp(pos.minScrollExtent, pos.maxScrollExtent).toDouble();
+    _target = t;
+    _c.animateTo(t, duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _onSignal,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: CustomScrollView(
+          controller: _c,
+          physics: const NeverScrollableScrollPhysics(),
+          slivers: widget.slivers,
+        ),
+      ),
+    );
+  }
 }

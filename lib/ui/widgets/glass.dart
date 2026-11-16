@@ -101,8 +101,8 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
                 ]),
                 child: ClipRRect(
                   borderRadius: r,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: _MaybeBlur(
+                    sigma: 0,
                     child: CustomPaint(
                       foregroundPainter: _GlassPainter(
                         radius: widget.radius,
@@ -214,7 +214,7 @@ class GlassPanel extends StatelessWidget {
     this.radius = 24,
     this.padding = EdgeInsets.zero,
     this.opacity = 0.06,
-    this.blur = 30,
+    this.blur = 0,
   });
 
   @override
@@ -226,8 +226,8 @@ class GlassPanel extends StatelessWidget {
       ]),
       child: ClipRRect(
         borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: _MaybeBlur(
+          sigma: blur,
           child: CustomPaint(
             foregroundPainter: _GlassPainter(radius: radius, light: Offset.zero, hover: false, active: false),
             child: Container(
@@ -286,4 +286,13 @@ class _HoverIconState extends State<HoverIcon> {
     if (widget.tooltip != null) w = Tooltip(message: widget.tooltip!, child: w);
     return w;
   }
+}
+
+class _MaybeBlur extends StatelessWidget {
+  final double sigma;
+  final Widget child;
+  const _MaybeBlur({required this.sigma, required this.child});
+  @override
+  Widget build(BuildContext context) =>
+      sigma <= 0 ? child : BackdropFilter(filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma), child: child);
 }
