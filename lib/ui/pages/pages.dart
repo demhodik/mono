@@ -591,15 +591,32 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     if (_future == null) {
-      return const Center(
+      const genres = ['Фонк', 'Рэп', 'Рок', 'Lo-fi', 'Электроника', 'Инди', 'Поп', 'Джаз', 'Синтвейв', 'Метал'];
+      return Center(
         child: FadeSlideIn(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Orbit(width: 260, height: 130),
-            SizedBox(height: 12),
-            Text('Найди что угодно', style: TextStyle(fontFamily: 'Unbounded', fontSize: 22.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
-            SizedBox(height: 6),
-            Text('Пиши в строке поиска сверху', style: TextStyle(color: C.sub)),
-          ]),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Поиск',
+                  style: TextStyle(fontFamily: 'Unbounded', fontSize: 52, fontWeight: FontWeight.w700, letterSpacing: -1.5)),
+              const SizedBox(height: 8),
+              const Text('Трек, артист или альбом — пиши в строке сверху. Или начни с жанра:',
+                  style: TextStyle(color: C.sub, fontSize: 16)),
+              const SizedBox(height: 24),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                for (var i = 0; i < genres.length; i++)
+                  FadeSlideIn.index(
+                    i,
+                    dy: 12,
+                    child: GlassButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                      onTap: () => app.search(genres[i]),
+                      child: Text(genres[i], style: const TextStyle(fontSize: 15)),
+                    ),
+                  ),
+              ]),
+            ]),
+          ),
         ),
       );
     }
