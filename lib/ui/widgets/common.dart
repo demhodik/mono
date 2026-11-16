@@ -1,33 +1,32 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../api/models.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import 'glass.dart';
-
-const greyscale = ColorFilter.matrix(<double>[
-  0.2126, 0.7152, 0.0722, 0, 0, //
-  0.2126, 0.7152, 0.0722, 0, 0, //
-  0.2126, 0.7152, 0.0722, 0, 0, //
-  0, 0, 0, 1, 0,
-]);
+import 'motion.dart';
+import 'vinyl.dart';
 
 class Cover extends StatelessWidget {
   final String url;
   final double size;
   final double radius;
   final IconData fallback;
-  const Cover(this.url, {super.key, this.size = 48, this.radius = 4, this.fallback = Icons.music_note});
+  const Cover(this.url, {super.key, this.size = 48, this.radius = 8, this.fallback = Icons.music_note_rounded});
 
   @override
   Widget build(BuildContext context) {
     final ph = Container(
       width: size,
       height: size,
-      color: C.hover,
-      child: Icon(fallback, color: C.sub, size: size * 0.45),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2A2A2A), Color(0xFF111111)],
+        ),
+      ),
+      child: Icon(fallback, color: C.sub, size: size * 0.42),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -39,9 +38,11 @@ class Cover extends StatelessWidget {
               height: size,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              errorBuilder: (_, __, ___) => ph,
-              frameBuilder: (_, child, frame, sync) =>
-                  sync || frame != null ? child : ph,
+              errorBuilder: (_, _, _) => ph,
+              frameBuilder: (_, child, frame, sync) => AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: sync || frame != null ? child : ph,
+              ),
             ),
     );
   }
@@ -51,7 +52,6 @@ class Cover extends StatelessWidget {
 class Loader<T> extends StatefulWidget {
   final Future<T> Function() load;
   final Widget Function(BuildContext context, T data) builder;
-  /// When true, spinner/error are wrapped so the Loader can live in a CustomScrollView.
   final bool sliver;
   const Loader({super.key, required this.load, required this.builder, this.sliver = false});
 
@@ -74,28 +74,33 @@ class _LoaderState<T> extends State<Loader<T>> {
               const SizedBox(height: 12),
               Text('${snap.error}', style: const TextStyle(color: C.sub), textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              GlassButton(
-                onTap: () => setState(() => _future = widget.load()),
-                child: const Text('Повторить'),
-              ),
+              GlassButton(onTap: () => setState(() => _future = widget.load()), child: const Text('Повторить')),
             ]),
           ));
         }
         if (!snap.hasData) {
-          return _wrap(const Center(
-            child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
-          ));
+          return _wrap(const Center(child: GlassSpinner()));
         }
         return widget.builder(context, snap.data as T);
       },
     );
   }
 
-  Widget _wrap(Widget w) =>
-      widget.sliver ? SliverToBoxAdapter(child: SizedBox(height: 160, child: w)) : w;
+  Widget _wrap(Widget w) => widget.sliver ? SliverToBoxAdapter(child: SizedBox(height: 180, child: w)) : w;
 }
 
-/// Scrollable page body with a header and slivers below.
+class GlassSpinner extends StatelessWidget {
+  final double size;
+  const GlassSpinner({super.key, this.size = 34});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white, strokeCap: StrokeCap.round),
+      );
+}
+
+/// Scrollable page body.
 class MonoPage extends StatelessWidget {
   final Widget header;
   final List<Widget> slivers;
@@ -103,112 +108,125 @@ class MonoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(child: header),
-        ...slivers,
-        const SliverToBoxAdapter(child: SizedBox(height: 40)),
-      ],
-    );
+    return CustomScrollView(slivers: [
+      SliverToBoxAdapter(child: header),
+      ...slivers,
+      const SliverToBoxAdapter(child: SizedBox(height: 140)),
+    ]);
   }
 }
 
+/// Header: tilting cover with a vinyl sliding out of it + big title.
 class PageHeader extends StatelessWidget {
   final String overline;
   final String title;
   final String? subtitle;
   final String image;
   final IconData icon;
+  final String source;
   const PageHeader({
     super.key,
     required this.overline,
     required this.title,
     this.subtitle,
     this.image = '',
-    this.icon = Icons.music_note,
+    this.icon = Icons.music_note_rounded,
+    this.source = '',
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 300,
-      child: Stack(fit: StackFit.expand, children: [
-        // blurred greyscale cover as backdrop
-        if (image.isNotEmpty)
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-            child: ColorFiltered(
-              colorFilter: greyscale,
-              child: Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
-            ),
-          ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: image.isNotEmpty
-                  ? [Colors.black.withValues(alpha: 0.15), C.panel]
-                  : [const Color(0xFF4A4A4A), C.panel],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 24, 32, 20),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        FadeSlideIn(
+          child: SizedBox(
+            width: 310,
+            height: 220,
+            child: ListenableBuilder(
+              listenable: app.player,
+              builder: (context, _) {
+                final playing = app.player.source == source && app.player.playing;
+                return Stack(children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutBack,
+                    left: playing ? 100 : 60,
+                    top: 10,
+                    child: Vinyl(cover: image, size: 200, spinning: playing),
+                  ),
+                  Tilt3D(
+                    radius: 18,
+                    child: Container(
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 40, offset: const Offset(0, 18)),
+                      ]),
+                      child: image.isNotEmpty ? Cover(image, size: 220, radius: 18) : IconArt(icon: icon, size: 220),
+                    ),
+                  ),
+                ]);
+              },
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 60, 28, 24),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Container(
-              decoration: BoxDecoration(boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 40, offset: const Offset(0, 8)),
-              ]),
-              child: image.isNotEmpty
-                  ? Cover(image, size: 200, radius: 6)
-                  : Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFFFFFFF), Color(0xFF6B6B6B)],
-                        ),
-                      ),
-                      child: Icon(icon, size: 84, color: Colors.black),
-                    ),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
-                Text(overline, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                Text(title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: title.length > 24 ? 44 : 72,
-                      fontWeight: FontWeight.w900,
-                      height: 1.05,
-                      letterSpacing: -2,
-                    )),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 12),
-                  Text(subtitle!, style: const TextStyle(color: C.sub, fontSize: 14)),
-                ],
-              ]),
-            ),
-          ]),
+        const SizedBox(width: 28),
+        Expanded(
+          child: FadeSlideIn(
+            delay: const Duration(milliseconds: 120),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(overline.toUpperCase(),
+                  style: const TextStyle(fontSize: 12, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: title.length > 22 ? 40 : 64,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                    letterSpacing: -2,
+                  )),
+              if (subtitle != null) ...[
+                const SizedBox(height: 14),
+                Text(subtitle!, style: const TextStyle(color: C.sub, fontSize: 14)),
+              ],
+            ]),
+          ),
         ),
       ]),
     );
   }
 }
 
-/// Row of actions under the header: big play + shuffle.
+class IconArt extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final double radius;
+  const IconArt({super.key, required this.icon, required this.size, this.radius = 18});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3A3A3A), Color(0xFF0E0E0E)],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Icon(icon, size: size * 0.42, color: Colors.white),
+    );
+  }
+}
+
+/// Big play + shuffle.
 class PlayActions extends StatelessWidget {
   final List<Track> tracks;
   final String source;
-  final List<Widget> extra;
-  const PlayActions({super.key, required this.tracks, required this.source, this.extra = const []});
+  const PlayActions({super.key, required this.tracks, required this.source});
 
   @override
   Widget build(BuildContext context) {
@@ -218,25 +236,29 @@ class PlayActions extends StatelessWidget {
         final p = app.player;
         final isThis = p.source == source && p.current != null;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
+          padding: const EdgeInsets.fromLTRB(32, 4, 32, 18),
           child: Row(children: [
-            GlassButton.icon(
-              isThis && p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 34,
-              pad: 12,
+            GlassButton(
               active: true,
-              tooltip: 'Слушать',
-              onTap: tracks.isEmpty
-                  ? null
-                  : () => isThis ? p.toggle() : p.playList(tracks, 0, source: source),
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+              iconSize: 26,
+              onTap: tracks.isEmpty ? null : () => isThis ? p.toggle() : p.playList(tracks, 0, source: source),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(isThis && p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                const SizedBox(width: 8),
+                Text(isThis && p.playing ? 'Пауза' : 'Слушать', style: const TextStyle(fontSize: 15)),
+              ]),
             ),
-            const SizedBox(width: 16),
-            GlassButton.icon(Icons.shuffle_rounded,
-                tooltip: 'Перемешать',
-                size: 22,
-                pad: 11,
-                onTap: tracks.isEmpty ? null : () => p.playAll(tracks, source: source, shuffled: true)),
-            ...extra,
+            const SizedBox(width: 12),
+            GlassButton(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              onTap: tracks.isEmpty ? null : () => p.playAll(tracks, source: source, shuffled: true),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.shuffle_rounded),
+                SizedBox(width: 8),
+                Text('Вперемешку'),
+              ]),
+            ),
           ]),
         );
       },
@@ -244,29 +266,7 @@ class PlayActions extends StatelessWidget {
   }
 }
 
-class TrackListHeader extends StatelessWidget {
-  const TrackListHeader({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(28, 0, 28, 8),
-      child: DecoratedBox(
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: C.line))),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(children: [
-            SizedBox(width: 32, child: Text('#', style: TextStyle(color: C.sub))),
-            Expanded(child: Text('Название', style: TextStyle(color: C.sub, fontSize: 13))),
-            SizedBox(width: 40),
-            SizedBox(width: 56, child: Icon(Icons.schedule_rounded, size: 18, color: C.sub)),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sliver list of tracks, Spotify style.
+/// Track list.
 class TrackSliver extends StatelessWidget {
   final List<Track> tracks;
   final String source;
@@ -283,10 +283,13 @@ class TrackSliver extends StatelessWidget {
       );
     }
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       sliver: SliverList.builder(
         itemCount: tracks.length,
-        itemBuilder: (context, i) => TrackRow(tracks: tracks, index: i, source: source),
+        itemBuilder: (context, i) {
+          final row = TrackRow(tracks: tracks, index: i, source: source);
+          return i < 16 ? FadeSlideIn.index(i, dy: 16, child: row) : row;
+        },
       ),
     );
   }
@@ -315,67 +318,74 @@ class _TrackRowState extends State<TrackRow> {
         final current = p.isCurrent(t);
         final liked = app.isLiked(t);
         Widget lead;
-        if (_hover) {
-          lead = Icon(current && p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 20);
-        } else if (current) {
-          lead = Icon(p.playing ? Icons.graphic_eq_rounded : Icons.volume_up_rounded, size: 18);
+        if (current) {
+          lead = EqBars(playing: p.playing);
+        } else if (_hover) {
+          lead = const Icon(Icons.play_arrow_rounded, size: 20);
         } else {
-          lead = Text('${widget.index + 1}', style: const TextStyle(color: C.sub, fontSize: 15));
+          lead = Text('${widget.index + 1}', style: const TextStyle(color: C.dim, fontSize: 14));
         }
         return MouseRegion(
+          cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (current) {
-                p.toggle();
-              } else {
-                p.playList(widget.tracks, widget.index, source: widget.source);
-              }
-            },
+            onTap: () => current ? p.toggle() : p.playList(widget.tracks, widget.index, source: widget.source),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              height: 62,
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              transform: Matrix4.translationValues(_hover ? 4 : 0, 0, 0),
               decoration: BoxDecoration(
-                color: _hover ? C.hover : (current ? Colors.white.withValues(alpha: 0.06) : Colors.transparent),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(16),
+                color: current
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : (_hover ? Colors.white.withValues(alpha: 0.06) : Colors.transparent),
+                border: Border.all(color: Colors.white.withValues(alpha: current ? 0.16 : (_hover ? 0.08 : 0))),
               ),
               child: Opacity(
                 opacity: t.available ? 1 : 0.4,
                 child: Row(children: [
-                  SizedBox(width: 32, child: lead),
-                  Cover(t.coverOf(100), size: 40),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 30, child: Center(child: lead)),
+                  const SizedBox(width: 8),
+                  AnimatedScale(
+                    scale: _hover ? 1.06 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    child: Cover(t.coverOf(100), size: 44, radius: 10),
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(t.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: current ? FontWeight.w800 : FontWeight.w500,
-                            decoration: current ? TextDecoration.underline : null,
-                            decorationColor: Colors.white,
-                          )),
-                      const SizedBox(height: 2),
-                      Text(t.artists,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: _hover ? Colors.white : C.sub, fontSize: 13)),
-                    ]),
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(t.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 15, fontWeight: current ? FontWeight.w800 : FontWeight.w600)),
+                          const SizedBox(height: 3),
+                          Text(t.artists,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: C.sub, fontSize: 13)),
+                        ]),
                   ),
                   SizedBox(
                     width: 40,
-                    child: (liked || _hover)
-                        ? HoverIcon(liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            size: 18, active: liked, onTap: () => app.toggleLike(t))
-                        : null,
+                    child: AnimatedOpacity(
+                      opacity: (liked || _hover) ? 1 : 0,
+                      duration: const Duration(milliseconds: 150),
+                      child: HoverIcon(liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          size: 18, active: liked, onTap: () => app.toggleLike(t)),
+                    ),
                   ),
                   SizedBox(
-                    width: 56,
-                    child: Text(fmt(t.duration), style: const TextStyle(color: C.sub, fontSize: 13)),
+                    width: 52,
+                    child: Text(fmt(t.duration),
+                        textAlign: TextAlign.right, style: const TextStyle(color: C.sub, fontSize: 13)),
                   ),
                 ]),
               ),
@@ -395,21 +405,27 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
+      padding: const EdgeInsets.fromLTRB(32, 30, 32, 14),
       child: Row(children: [
-        Expanded(child: Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800))),
+        Expanded(
+          child: Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
+        ),
         if (onMore != null)
           GlassButton(
             onTap: onMore,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            child: const Text('Показать все', style: TextStyle(fontSize: 13)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('Все', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 4),
+              Icon(Icons.arrow_forward_rounded, size: 16),
+            ]),
           ),
       ]),
     );
   }
 }
 
-/// Square card (album / playlist) with a glass play button on hover.
+/// Square card that tilts in 3D on hover, with a glass play button.
 class MediaCard extends StatefulWidget {
   final String image;
   final String title;
@@ -441,43 +457,54 @@ class _MediaCardState extends State<MediaCard> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         onTap: widget.onOpen,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _hover ? C.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             AspectRatio(
               aspectRatio: 1,
               child: LayoutBuilder(
-                builder: (context, c) => Stack(children: [
-                  Cover(widget.image, size: c.maxWidth, radius: 6, fallback: widget.fallback),
-                  if (widget.onPlay != null)
-                    Positioned(
-                      right: 8,
-                      bottom: 8,
-                      child: AnimatedOpacity(
-                        opacity: _hover ? 1 : 0,
-                        duration: const Duration(milliseconds: 150),
-                        child: AnimatedSlide(
-                          offset: _hover ? Offset.zero : const Offset(0, 0.25),
-                          duration: const Duration(milliseconds: 150),
-                          child: GlassButton.icon(Icons.play_arrow_rounded,
-                              size: 28, pad: 10, active: true, onTap: widget.onPlay),
+                builder: (context, c) => Tilt3D(
+                  radius: 16,
+                  child: Stack(children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: _hover ? 0.7 : 0.4),
+                          blurRadius: _hover ? 30 : 16,
+                          offset: Offset(0, _hover ? 16 : 8),
+                        ),
+                      ]),
+                      child: widget.image.isEmpty
+                          ? IconArt(icon: widget.fallback, size: c.maxWidth, radius: 16)
+                          : Cover(widget.image, size: c.maxWidth, radius: 16, fallback: widget.fallback),
+                    ),
+                    if (widget.onPlay != null)
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: AnimatedOpacity(
+                          opacity: _hover ? 1 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: AnimatedSlide(
+                            offset: _hover ? Offset.zero : const Offset(0, 0.3),
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutBack,
+                            child: GlassButton.icon(Icons.play_arrow_rounded,
+                                size: 26, pad: 11, active: true, onTap: widget.onPlay),
+                          ),
                         ),
                       ),
-                    ),
-                ]),
+                  ]),
+                ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(widget.title,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(widget.subtitle,
-                maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.sub, fontSize: 13)),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.sub, fontSize: 13)),
           ]),
         ),
       ),
@@ -485,7 +512,6 @@ class _MediaCardState extends State<MediaCard> {
   }
 }
 
-/// Responsive grid of cards as a sliver.
 class CardGrid extends StatelessWidget {
   final int count;
   final Widget Function(int i) item;
@@ -494,14 +520,11 @@ class CardGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       sliver: SliverGrid.builder(
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 220,
-          mainAxisExtent: 290,
-        ),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 230, mainAxisExtent: 290),
         itemCount: count,
-        itemBuilder: (_, i) => item(i),
+        itemBuilder: (_, i) => FadeSlideIn.index(i, child: item(i)),
       ),
     );
   }

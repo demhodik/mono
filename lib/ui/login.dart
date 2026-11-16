@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../api/yandex_api.dart';
 import '../state/app_state.dart';
 import 'theme.dart';
+import 'widgets/background.dart';
 import 'widgets/glass.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -38,11 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: C.bg,
-      body: Stack(children: [
-        // soft white blobs behind the glass
+      body: LiquidBackground(child: Stack(children: [
         const Positioned(left: -120, top: -80, child: _Blob(size: 420, alpha: 0.18)),
         const Positioned(right: -100, bottom: -120, child: _Blob(size: 480, alpha: 0.12)),
-        const Positioned(right: 200, top: 120, child: _Blob(size: 180, alpha: 0.10)),
         const Positioned(left: 0, right: 0, top: 0, height: 48, child: DragToMoveArea(child: SizedBox.expand())),
         Positioned(
           right: 0,
@@ -67,11 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-                      child: const Icon(Icons.graphic_eq_rounded, color: Colors.black, size: 28),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset('assets/icon.png', width: 56, height: 56),
                     ),
                     const SizedBox(width: 14),
                     const Text('Mono', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, letterSpacing: -1)),
@@ -138,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ]),
+      ])),
     );
   }
 }

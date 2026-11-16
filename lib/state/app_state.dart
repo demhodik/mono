@@ -10,7 +10,7 @@ final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 /// Global app state (single user, personal app).
 late final AppState app;
 
-enum PageKind { home, search, likes, wave, chart, releases, album, playlist }
+enum PageKind { home, search, library, likes, wave, chart, releases, album, playlist }
 
 class AppRoute {
   final PageKind kind;
@@ -36,6 +36,14 @@ class AppState extends ChangeNotifier {
   bool get canBack => _pos > 0;
   bool get canForward => _pos < _history.length - 1;
   String searchQuery = '';
+
+  /// Full-screen "now playing" view.
+  bool nowPlaying = false;
+  void setNowPlaying(bool v) {
+    if (nowPlaying == v) return;
+    nowPlaying = v;
+    notifyListeners();
+  }
 
   static const _tokenKey = 'ym_token';
 
@@ -96,7 +104,12 @@ class AppState extends ChangeNotifier {
   // ---------- navigation ----------
 
   void go(PageKind kind, [Object? arg]) {
-    if (route.kind == kind && route.arg == arg && kind != PageKind.search) return;
+    final wasOpen = nowPlaying;
+    nowPlaying = false;
+    if (route.kind == kind && route.arg == arg && kind != PageKind.search) {
+      if (wasOpen) notifyListeners();
+      return;
+    }
     _history.removeRange(_pos + 1, _history.length);
     _history.add(AppRoute(kind, arg));
     _pos = _history.length - 1;

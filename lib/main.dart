@@ -1,14 +1,25 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'log.dart';
 import 'state/app_state.dart';
+import 'ui/intro.dart';
 import 'ui/login.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Log.init();
+  Log.w('start');
+  FlutterError.onError = (d) => Log.w('flutter error: ${d.exceptionAsString()}\n${d.stack}');
+  PlatformDispatcher.instance.onError = (e, st) {
+    Log.w('uncaught: $e\n$st');
+    return true;
+  };
   MediaKit.ensureInitialized();
   await windowManager.ensureInitialized();
 
@@ -30,8 +41,15 @@ Future<void> main() async {
   runApp(const MonoApp());
 }
 
-class MonoApp extends StatelessWidget {
+class MonoApp extends StatefulWidget {
   const MonoApp({super.key});
+
+  @override
+  State<MonoApp> createState() => _MonoAppState();
+}
+
+class _MonoAppState extends State<MonoApp> {
+  bool _intro = true;
 
   @override
   Widget build(BuildContext context) {
@@ -40,13 +58,17 @@ class MonoApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       scaffoldMessengerKey: scaffoldMessengerKey,
+      builder: (context, child) => Stack(children: [
+        child!,
+        if (_intro) IntroOverlay(onDone: () => setState(() => _intro = false)),
+      ]),
       home: ListenableBuilder(
         listenable: app,
         builder: (context, _) {
           if (!app.ready) {
             return const Scaffold(
               backgroundColor: Colors.black,
-              body: Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
+              body: SizedBox.shrink(),
             );
           }
           return app.loggedIn ? const Shell() : const LoginScreen();
