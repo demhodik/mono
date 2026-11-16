@@ -31,18 +31,7 @@ class GameOverlay extends ChangeNotifier {
     } catch (e) {
       Log.w('hotkey: $e');
     }
-    // hardware media keys (work even when Mono is in the background)
-    final media = <PhysicalKeyboardKey, void Function()>{
-      PhysicalKeyboardKey.mediaPlayPause: () => onMedia?.call('toggle'),
-      PhysicalKeyboardKey.mediaTrackNext: () => onMedia?.call('next'),
-      PhysicalKeyboardKey.mediaTrackPrevious: () => onMedia?.call('prev'),
-    };
-    for (final e in media.entries) {
-      try {
-        await hotKeyManager.register(HotKey(key: e.key, scope: HotKeyScope.system), keyDownHandler: (_) => e.value());
-      } catch (err) {
-        Log.w('media key: $err');
-      }
+  }
     }
   }
 
