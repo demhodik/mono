@@ -92,14 +92,18 @@ class AppState extends ChangeNotifier {
   /// Kept for compatibility: the "now playing" view is the home stage now.
   bool nowPlaying = false;
   void setNowPlaying(bool v) {
-    if (v) go(PageKind.home);
+    if (v && player.current == null) return;
+    if (nowPlaying == v) return;
+    nowPlaying = v;
+    notifyListeners();
   }
 
   /// What the stage card on the home screen shows: 0 cover, 1 lyrics, 2 queue.
   int stageView = 0;
   void setStageView(int v) {
-    stageView = stageView == v ? 0 : v;
-    if (route.kind != PageKind.home) go(PageKind.home);
+    if (player.current == null) return;
+    stageView = (nowPlaying && stageView == v) ? 0 : v;
+    nowPlaying = true;
     notifyListeners();
   }
 

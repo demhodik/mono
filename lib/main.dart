@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'log.dart';
+import 'ui/widgets/orb3d.dart';
 import 'state/app_state.dart';
 import 'ui/intro.dart';
 import 'ui/lyrics.dart';
@@ -24,6 +25,7 @@ Future<void> main() async {
     return true;
   };
   MediaKit.ensureInitialized();
+  Orb3D.preload();
   await windowManager.ensureInitialized();
   try {
     await acrylic.Window.initialize();

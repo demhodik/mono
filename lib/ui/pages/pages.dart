@@ -10,6 +10,7 @@ import '../widgets/common.dart';
 import '../widgets/coverflow.dart';
 import '../widgets/glass.dart';
 import '../widgets/motion.dart';
+import '../widgets/orb3d.dart';
 import '../../state/player.dart';
 import '../lyrics.dart';
 import '../shell.dart' show StageProgress, UpNextRow;
@@ -36,38 +37,128 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final api = app.api!;
     return LayoutBuilder(builder: (context, c) {
-      final stageH = (c.maxHeight - 190).clamp(420.0, 760.0);
+      final heroH = (c.maxHeight * 0.78).clamp(440.0, 640.0);
       return SmoothScrollView(slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(40, 6, 40, 0),
-            child: SizedBox(height: stageH, child: const Stage()),
-          ),
-        ),
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(40, 14, 40, 0),
-            child: FadeSlideIn(delay: Duration(milliseconds: 220), child: VibeBox()),
-          ),
-        ),
+        SliverToBoxAdapter(child: SizedBox(height: heroH, child: const WaveHero())),
         if (app.history.isNotEmpty) ...[
-          const SliverToBoxAdapter(child: SectionTitle('Недавно')),
+          SliverToBoxAdapter(child: SectionTitle('Недавно', onMore: () => app.go(PageKind.library))),
           SliverToBoxAdapter(
             child: SizedBox(
               height: 74,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 36),
+                padding: const EdgeInsets.symmetric(horizontal: 28),
                 itemCount: app.history.length.clamp(0, 24),
                 itemBuilder: (_, i) => FadeSlideIn.index(i, child: _RecentChip(track: app.history[i])),
               ),
             ),
           ),
         ],
-        const SliverToBoxAdapter(child: SizedBox(height: 130)),
+        SliverToBoxAdapter(child: SectionTitle('Новые релизы', onMore: () => app.go(PageKind.releases))),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 290,
+            child: Loader<List<Album>>(
+              load: api.newReleases,
+              builder: (context, albums) => ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                itemCount: albums.length.clamp(0, 20),
+                itemBuilder: (_, i) => SizedBox(width: 200, child: FadeSlideIn.index(i, child: _albumCard(albums[i]))),
+              ),
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ]);
     });
+  }
+}
+
+/// "Моя волна" like in Yandex Music: a big living 3D blob with play in the middle,
+/// mood chips under it and a one-line vibe request.
+class WaveHero extends StatelessWidget {
+  const WaveHero({super.key});
+
+  static const _moods = {'all': 'Любое', 'active': 'Бодрое', 'fun': 'Весёлое', 'calm': 'Спокойное', 'sad': 'Грустное'};
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([app, app.player]),
+      builder: (context, _) {
+        final p = app.player;
+        final onWave = (p.source == 'wave' || p.source == 'vibe') && p.current != null;
+        final playing = onWave && p.playing;
+        return LayoutBuilder(builder: (context, c) {
+          final orb = (c.maxHeight - 210).clamp(240.0, 440.0);
+          return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            FadeSlideIn(
+              child: Text(p.source == 'vibe' && onWave ? 'Подбор: ${app.vibeText}' : 'Моя волна',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontFamily: 'Unbounded', fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.8)),
+            ),
+            SizedBox(
+              height: orb,
+              width: orb * 1.3,
+              child: Stack(alignment: Alignment.center, children: [
+                Orb3D(size: orb, active: playing),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: onWave ? p.toggle : app.startWave,
+                    child: AnimatedScale(
+                      scale: playing ? 0.9 : 1,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOutBack,
+                      child: Container(
+                        width: 78,
+                        height: 78,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.35),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 24)],
+                        ),
+                        child: Center(child: PlayPauseIcon(playing: playing, size: 40, color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              child: onWave
+                  ? Text('${p.current!.title} — ${p.current!.artists}',
+                      key: ValueKey(p.current!.id),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: C.sub, fontSize: 14))
+                  : const Text('Бесконечный поток под твой вкус', key: ValueKey('idle'), style: TextStyle(color: C.sub, fontSize: 14)),
+            ),
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+              for (final e in _moods.entries)
+                GlassButton(
+                  active: app.waveSettings.mood == e.key && p.source != 'vibe',
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                  onTap: () {
+                    app.waveSettings.mood = e.key;
+                    app.startWave();
+                  },
+                  child: Text(e.value, style: const TextStyle(fontSize: 13)),
+                ),
+            ]),
+            const SizedBox(height: 16),
+            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640), child: const VibeBox()),
+          ]);
+        });
+      },
+    );
   }
 }
 
@@ -482,7 +573,6 @@ class _VibeBoxState extends State<VibeBox> {
     'энергичное для тренировки',
     'чилл на русском',
   ];
-  static const _chips = ['Ночная игра', 'Фокус', 'Тренировка', 'В дорогу', 'Под дождь', 'Вечеринка'];
 
   @override
   void initState() {
@@ -542,7 +632,7 @@ class _VibeBoxState extends State<VibeBox> {
                           opacity: a,
                           child: SlideTransition(position: Tween(begin: const Offset(0, 0.5), end: Offset.zero).animate(a), child: c),
                         ),
-                        child: Text('Какой вайб? Например, ${_examples[_hint]}',
+                        child: Text('Или опиши вайб: ${_examples[_hint]}',
                             key: ValueKey(_hint), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.dim, fontSize: 15)),
                       ),
                     ),
@@ -568,23 +658,6 @@ class _VibeBoxState extends State<VibeBox> {
                         Icon(Icons.arrow_forward_rounded, size: 18),
                       ]),
                     ),
-            ]),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final c in _chips)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: GlassButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                    onTap: () => _go(c),
-                    child: Text(c, style: const TextStyle(fontSize: 13)),
-                  ),
-                ),
             ]),
           ),
         ),
