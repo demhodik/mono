@@ -126,8 +126,12 @@ class BottomBar extends StatelessWidget {
         if (kind == PageKind.playlist || kind == PageKind.album || kind == PageKind.artist) kind = PageKind.library;
         return ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: SizedBox(
+          child: Container(
             height: 66,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.62),
+              borderRadius: BorderRadius.circular(33),
+            ),
             child: GlassPanel(
               radius: 33,
               opacity: 0.10,
