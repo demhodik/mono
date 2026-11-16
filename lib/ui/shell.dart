@@ -687,8 +687,8 @@ class NowPlayingView extends StatelessWidget {
                             Text(t.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 48, fontWeight: FontWeight.w800, letterSpacing: -1.8, height: 1.05)),
+                                style: const TextStyle(fontFamily: 'Unbounded', 
+                                    fontSize: 35.5, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.05)),
                             const SizedBox(height: 10),
                             Text(t.artists, style: const TextStyle(fontSize: 18, color: C.sub)),
                           ],

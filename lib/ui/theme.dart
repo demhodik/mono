@@ -23,7 +23,7 @@ ThemeData buildTheme() {
       surface: C.panel,
       onSurface: C.text,
     ),
-    textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text, fontFamily: 'Segoe UI'),
+    textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text, fontFamily: 'Manrope'),
     sliderTheme: const SliderThemeData(
       trackHeight: 4,
       activeTrackColor: Colors.white,

@@ -1,6 +1,10 @@
 import 'dart:math' as math;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+
+import '../../state/app_state.dart';
 
 /// Slowly drifting monochrome "liquid" light behind all glass,
 /// plus a soft light that follows the mouse.
@@ -32,16 +36,103 @@ class _LiquidBackgroundState extends State<LiquidBackground> with SingleTickerPr
       onExit: (_) => _mouse.value = null,
       child: Stack(fit: StackFit.expand, children: [
         const ColoredBox(color: Color(0xFF040404)),
+        const _Ambient(),
         RepaintBoundary(
           child: AnimatedBuilder(
             animation: Listenable.merge([_c, _mouse]),
             builder: (context, _) => CustomPaint(painter: _BlobPainter(_c.value, _mouse.value)),
           ),
         ),
+        const IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _GrainPainter()))),
         widget.child,
       ]),
     );
   }
+}
+
+/// Current track cover, huge, blurred and greyscale, slowly breathing.
+class _Ambient extends StatefulWidget {
+  const _Ambient();
+  @override
+  State<_Ambient> createState() => _AmbientState();
+}
+
+class _AmbientState extends State<_Ambient> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 24))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ListenableBuilder(
+        listenable: app.player,
+        builder: (context, _) {
+          final t = app.player.current;
+          final url = t?.coverOf(200) ?? '';
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 1600),
+            child: url.isEmpty
+                ? const SizedBox.expand(key: ValueKey('none'))
+                : RepaintBoundary(
+                    key: ValueKey(url),
+                    child: AnimatedBuilder(
+                      animation: _c,
+                      builder: (context, child) => Transform.scale(
+                        scale: 1.25 + 0.12 * Curves.easeInOut.transform(_c.value),
+                        child: Transform.rotate(angle: (_c.value - 0.5) * 0.08, child: child),
+                      ),
+                      child: ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(sigmaX: 80, sigmaY: 80, tileMode: TileMode.mirror),
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.matrix(<double>[
+                            0.2126, 0.7152, 0.0722, 0, 0, //
+                            0.2126, 0.7152, 0.0722, 0, 0, //
+                            0.2126, 0.7152, 0.0722, 0, 0, //
+                            0, 0, 0, 0.42, 0,
+                          ]),
+                          child: SizedBox.expand(
+                            child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox()),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Static film grain for texture.
+class _GrainPainter extends CustomPainter {
+  const _GrainPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = math.Random(7);
+    final light = <Offset>[];
+    final dark = <Offset>[];
+    final n = (size.width * size.height / 260).clamp(0, 14000).toInt();
+    for (var i = 0; i < n; i++) {
+      final o = Offset(r.nextDouble() * size.width, r.nextDouble() * size.height);
+      (i.isEven ? light : dark).add(o);
+    }
+    canvas.drawPoints(ui.PointMode.points, light, Paint()
+      ..color = Colors.white.withValues(alpha: 0.035)
+      ..strokeWidth = 1.2);
+    canvas.drawPoints(ui.PointMode.points, dark, Paint()
+      ..color = Colors.black.withValues(alpha: 0.18)
+      ..strokeWidth = 1.2);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _BlobPainter extends CustomPainter {

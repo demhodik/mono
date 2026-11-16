@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Image.asset('assets/icon.png', width: 56, height: 56),
                     ),
                     const SizedBox(width: 14),
-                    const Text('Mono', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                    const Text('Mono', style: TextStyle(fontFamily: 'Unbounded', fontSize: 25.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
                   ]),
                   const SizedBox(height: 8),
                   const Text('Вход через аккаунт Яндекс Музыки', style: TextStyle(color: C.sub)),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -8,6 +7,7 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/background.dart';
 import '../widgets/common.dart';
+import '../widgets/coverflow.dart';
 import '../widgets/glass.dart';
 import '../widgets/motion.dart';
 
@@ -52,14 +52,46 @@ class HomePage extends StatelessWidget {
                   style: const TextStyle(fontSize: 15, color: C.sub, fontWeight: FontWeight.w500)),
               const SizedBox(height: 4),
               const Text('Что включим?',
-                  style: TextStyle(fontSize: 46, fontWeight: FontWeight.w800, letterSpacing: -1.8, height: 1.1)),
+                  style: TextStyle(fontFamily: 'Unbounded', fontSize: 34.0, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.1)),
             ]),
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(child: SectionTitle('Новые релизы', onMore: () => app.go(PageKind.releases))),
+      SliverToBoxAdapter(
+        child: SizedBox(
+          height: 300 + 300 * 0.32 + 70,
+          child: Loader<List<Album>>(
+            load: api.newReleases,
+            builder: (context, albums) {
+              final list = albums.take(20).toList();
+              return FadeSlideIn(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: CoverFlow(
+                    cardSize: 300,
+                    items: [
+                      for (final a in list) CoverFlowItem(image: a.coverOf(400), title: a.title, subtitle: a.artists),
+                    ],
+                    onOpen: (i) => app.go(PageKind.album, list[i]),
+                    onPlay: (i) async {
+                      try {
+                        final t = await app.api!.albumTracks(list[i].id);
+                        app.player.playList(t, 0, source: 'album:${list[i].id}');
+                      } catch (e) {
+                        app.toast('$e');
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
       const SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(32, 24, 32, 0),
+          padding: EdgeInsets.fromLTRB(32, 30, 32, 0),
           child: FadeSlideIn(delay: Duration(milliseconds: 120), child: WaveHero()),
         ),
       ),
@@ -90,21 +122,6 @@ class HomePage extends StatelessWidget {
                 ]);
               });
             },
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(child: SectionTitle('Новые релизы', onMore: () => app.go(PageKind.releases))),
-      SliverToBoxAdapter(
-        child: SizedBox(
-          height: 300,
-          child: Loader<List<Album>>(
-            load: api.newReleases,
-            builder: (context, albums) => ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              itemCount: math.min(albums.length, 24),
-              itemBuilder: (_, i) => SizedBox(width: 210, child: FadeSlideIn.index(i, child: _albumCard(albums[i]))),
-            ),
           ),
         ),
       ),
@@ -174,7 +191,7 @@ class WaveHero extends StatelessWidget {
                   const Text('ПЕРСОНАЛЬНЫЙ ПОТОК',
                       style: TextStyle(fontSize: 11, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  const Text('Моя волна', style: TextStyle(fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1.5)),
+                  const Text('Моя волна', style: TextStyle(fontFamily: 'Unbounded', fontSize: 32.6, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
                   const SizedBox(height: 6),
                   SizedBox(
                     width: 360,
@@ -397,7 +414,7 @@ class LibraryPage extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.fromLTRB(32, 18, 32, 8),
             child: FadeSlideIn(
-              child: Text('Медиатека', style: TextStyle(fontSize: 46, fontWeight: FontWeight.w800, letterSpacing: -1.8)),
+              child: Text('Медиатека', style: TextStyle(fontFamily: 'Unbounded', fontSize: 34.0, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
             ),
           ),
         ),
@@ -451,7 +468,7 @@ class ReleasesPage extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(32, 18, 32, 4),
             child: FadeSlideIn(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Новинки', style: TextStyle(fontSize: 46, fontWeight: FontWeight.w800, letterSpacing: -1.8)),
+                Text('Новинки', style: TextStyle(fontFamily: 'Unbounded', fontSize: 34.0, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
                 SizedBox(height: 4),
                 Text('Свежие релизы подтягиваются сами', style: TextStyle(color: C.sub)),
               ]),
@@ -512,7 +529,7 @@ class _SearchPageState extends State<SearchPage> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Orbit(width: 260, height: 130),
             SizedBox(height: 12),
-            Text('Найди что угодно', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -1)),
+            Text('Найди что угодно', style: TextStyle(fontFamily: 'Unbounded', fontSize: 22.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
             SizedBox(height: 6),
             Text('Пиши в строке поиска сверху', style: TextStyle(color: C.sub)),
           ]),
@@ -529,7 +546,7 @@ class _SearchPageState extends State<SearchPage> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(32, 18, 32, 12),
-              child: Text('«$_query»', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -1)),
+              child: Text('«$_query»', style: const TextStyle(fontFamily: 'Unbounded', fontSize: 25.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
             ),
           ),
           TrackSliver(key: ValueKey(_query), tracks: tracks, source: 'search:$_query'),
@@ -606,7 +623,7 @@ class _WavePageState extends State<WavePage> {
                 const Orbit(width: 620, height: 300, period: Duration(seconds: 5)),
                 Transform.rotate(angle: 0.6, child: const Orbit(width: 420, height: 200, period: Duration(seconds: 3))),
                 Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('Моя волна', style: TextStyle(fontSize: 56, fontWeight: FontWeight.w800, letterSpacing: -2)),
+                  const Text('Моя волна', style: TextStyle(fontFamily: 'Unbounded', fontSize: 41.4, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
                   const SizedBox(height: 14),
                   GlassButton(
                     active: true,

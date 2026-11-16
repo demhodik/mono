@@ -180,11 +180,11 @@ class PageHeader extends StatelessWidget {
               Text(title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: title.length > 22 ? 40 : 64,
-                    fontWeight: FontWeight.w800,
+                  style: TextStyle(fontFamily: 'Unbounded', 
+                    fontSize: (title.length > 22 ? 40 : 64) * 0.74,
+                    fontWeight: FontWeight.w700,
                     height: 1.0,
-                    letterSpacing: -2,
+                    letterSpacing: -0.6,
                   )),
               if (subtitle != null) ...[
                 const SizedBox(height: 14),
@@ -408,7 +408,7 @@ class SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 30, 32, 14),
       child: Row(children: [
         Expanded(
-          child: Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
+          child: Text(title, style: const TextStyle(fontFamily: 'Unbounded', fontSize: 19.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
         ),
         if (onMore != null)
           GlassButton(
