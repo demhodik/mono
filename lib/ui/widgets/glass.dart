@@ -109,6 +109,7 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
                         light: _light,
                         hover: _hover && enabled,
                         active: active,
+                        rimOnly: true,
                       ),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 220),
@@ -154,7 +155,9 @@ class _GlassPainter extends CustomPainter {
   final Offset light;
   final bool hover;
   final bool active;
-  _GlassPainter({required this.radius, required this.light, required this.hover, required this.active});
+  final bool rimOnly;
+  _GlassPainter(
+      {required this.radius, required this.light, required this.hover, required this.active, this.rimOnly = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -177,8 +180,8 @@ class _GlassPainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawRRect(rr, rim);
 
-    // specular spot following the cursor
-    if (hover || active) {
+    // specular spot following the cursor (subtle so content stays crisp)
+    if (hover && !active) {
       canvas.save();
       canvas.clipRRect(rr);
       final c = Offset(light.dx * size.width, light.dy * size.height);
@@ -188,7 +191,7 @@ class _GlassPainter extends CustomPainter {
         rad,
         Paint()
           ..shader = RadialGradient(colors: [
-            Colors.white.withValues(alpha: active ? 0.55 : 0.28),
+            Colors.white.withValues(alpha: rimOnly ? 0.10 : 0.28),
             Colors.white.withValues(alpha: 0),
           ]).createShader(Rect.fromCircle(center: c, radius: rad)),
       );

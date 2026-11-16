@@ -231,8 +231,8 @@ class _OrbPainter extends CustomPainter {
         ..shader = RadialGradient(
           center: const Alignment(-0.35, -0.45),
           radius: 1.0,
-          colors: const [Color(0xFFFFFFFF), Color(0xFFBDBDBD), Color(0xFF3A3A3A), Color(0xFF0C0C0C)],
-          stops: const [0.0, 0.25, 0.75, 1.0],
+          colors: const [Color(0xFFF2F2F2), Color(0xFFB0B0B0), Color(0xFF4A4A4A), Color(0xFF151515)],
+          stops: const [0.0, 0.35, 0.8, 1.0],
         ).createShader(Rect.fromCircle(center: c, radius: R * 1.1)),
     );
     // glass rim + inner highlight
@@ -243,13 +243,17 @@ class _OrbPainter extends CustomPainter {
         ..strokeWidth = 1.5
         ..color = Colors.white.withValues(alpha: 0.55),
     );
-    canvas.save();
-    canvas.clipPath(body);
-    canvas.drawPath(
-      _blob(c + Offset(R * 0.25, R * 0.3), R * 0.75, amp * 1.5, 7, speed * 1.2),
-      Paint()..color = Colors.black.withValues(alpha: 0.35),
+    // soft specular highlight
+    final hl = c + Offset(-R * 0.32, -R * 0.38);
+    canvas.drawCircle(
+      hl,
+      R * 0.42,
+      Paint()
+        ..shader = RadialGradient(colors: [
+          Colors.white.withValues(alpha: 0.75),
+          Colors.white.withValues(alpha: 0),
+        ]).createShader(Rect.fromCircle(center: hl, radius: R * 0.42)),
     );
-    canvas.restore();
   }
 
   @override
