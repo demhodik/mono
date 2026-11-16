@@ -151,10 +151,12 @@ class YandexApi {
   static const _lyricsKey = 'p93jhgh689SBReK6ghtw62';
   final _lyricsCache = <String, Lyrics>{};
 
-  Future<Lyrics> lyrics(String trackId) async {
+  Future<Lyrics> lyrics(Track track) async {
+    final trackId = track.id;
     final cached = _lyricsCache[trackId];
     if (cached != null) return cached;
-    Future<Lyrics?> fetch(String format) async {
+
+    Future<Lyrics?> yandex(String format) async {
       final ts = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
       final sign = base64.encode(Hmac(sha256, utf8.encode(_lyricsKey)).convert(utf8.encode('$trackId$ts')).bytes);
       try {
@@ -173,7 +175,47 @@ class YandexApi {
       }
     }
 
-    final result = await fetch('LRC') ?? await fetch('TEXT') ?? const Lyrics();
+    // Free open lyrics database as a fallback (lrclib.net).
+    Map? lrclibData;
+    Future<Map?> lrclib() async {
+      if (lrclibData != null) return lrclibData;
+      final artist = track.artists.split(', ').first;
+      final title = track.title.replaceAll(RegExp(r'\s*\(.*?\)'), '');
+      try {
+        final get = Uri.https('lrclib.net', '/api/get', {
+          'artist_name': artist,
+          'track_name': title,
+          if (track.duration > Duration.zero) 'duration': '${track.duration.inSeconds}',
+        });
+        var r = await _client.get(get, headers: {'User-Agent': 'Mono (personal player)'}).timeout(const Duration(seconds: 12));
+        if (r.statusCode == 200) return lrclibData = jsonDecode(utf8.decode(r.bodyBytes)) as Map;
+        final search = Uri.https('lrclib.net', '/api/search', {'track_name': title, 'artist_name': artist});
+        r = await _client.get(search, headers: {'User-Agent': 'Mono (personal player)'}).timeout(const Duration(seconds: 12));
+        if (r.statusCode == 200) {
+          final list = jsonDecode(utf8.decode(r.bodyBytes));
+          if (list is List && list.isNotEmpty) {
+            final withSync = list.whereType<Map>().where((m) => (m['syncedLyrics'] ?? '').toString().isNotEmpty);
+            return lrclibData = (withSync.isNotEmpty ? withSync.first : list.first) as Map;
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    Future<Lyrics?> lrclibSynced() async {
+      final m = await lrclib();
+      final t = m?['syncedLyrics']?.toString() ?? '';
+      if (t.isEmpty) return null;
+      final l = Lyrics.parseLrc(t);
+      return l.synced ? l : null;
+    }
+
+    Future<Lyrics?> lrclibPlain() async {
+      final t = (await lrclib())?['plainLyrics']?.toString() ?? '';
+      return t.trim().isEmpty ? null : Lyrics(plain: t);
+    }
+
+    final result = await yandex('LRC') ?? await lrclibSynced() ?? await yandex('TEXT') ?? await lrclibPlain() ?? const Lyrics();
     _lyricsCache[trackId] = result;
     return result;
   }

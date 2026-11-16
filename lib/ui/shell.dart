@@ -510,8 +510,8 @@ class PlayerIsland extends StatelessWidget {
                         ),
                       ),
                     ),
-                    HoverIcon(app.isLiked(t) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        active: app.isLiked(t), onTap: () => app.toggleLike(t)),
+                    HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+                        active: p.repeat != Repeat.off, onTap: p.cycleRepeat, tooltip: 'Повтор'),
                     const SizedBox(width: 10),
                     HoverIcon(Icons.shuffle_rounded, active: p.shuffle, onTap: p.toggleShuffle, tooltip: 'Перемешать'),
                     const SizedBox(width: 6),
@@ -524,8 +524,8 @@ class PlayerIsland extends StatelessWidget {
                     const SizedBox(width: 10),
                     GlassButton.icon(Icons.skip_next_rounded, size: 22, pad: 8, onTap: p.next),
                     const SizedBox(width: 6),
-                    HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                        active: p.repeat != Repeat.off, onTap: p.cycleRepeat, tooltip: 'Повтор'),
+                    HoverIcon(app.isLiked(t) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        active: app.isLiked(t), onTap: () => app.toggleLike(t), tooltip: 'Мне нравится'),
                     const SizedBox(width: 14),
                     HoverIcon(
                       p.volume == 0
@@ -733,6 +733,7 @@ class NowPlayingView extends StatelessWidget {
                       child: const Text('Далее'),
                     ),
                     const Spacer(),
+                    if (app.lyricsTab) ...[const LyricsSyncControl(), const SizedBox(width: 12)],
                     GlassButton(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       tooltip: 'Прозрачный текст поверх игры. Выход: Ctrl+Shift+L',

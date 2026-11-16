@@ -43,14 +43,14 @@ class GameOverlay extends ChangeNotifier {
       notifyListeners();
       final display = await screenRetriever.getPrimaryDisplay();
       final size = display.visibleSize ?? display.size;
-      const w = 1200.0, h = 170.0;
+      const w = 1160.0, h = 200.0;
       await acrylic.Window.setEffect(effect: acrylic.WindowEffect.transparent);
       await windowManager.setBackgroundColor(Colors.transparent);
       await windowManager.setHasShadow(false);
       await windowManager.setAlwaysOnTop(true);
       await windowManager.setMinimumSize(const Size(200, 80));
       await windowManager.setResizable(false);
-      await windowManager.setBounds(Rect.fromLTWH((size.width - w) / 2, size.height - h - 40, w, h));
+      await windowManager.setBounds(Rect.fromLTWH((size.width - w) / 2, 18, w, h));
       await windowManager.setIgnoreMouseEvents(true);
     } catch (e) {
       Log.w('overlay enter: $e');

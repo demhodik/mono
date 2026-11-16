@@ -76,7 +76,7 @@ class _MonoAppState extends State<MonoApp> {
             if (ov)
               const Material(
                 type: MaterialType.transparency,
-                child: Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: OverlayLyrics())),
+                child: Align(alignment: Alignment.topCenter, child: Padding(padding: EdgeInsets.fromLTRB(20, 6, 20, 0), child: OverlayLyrics())),
               ),
             if (_intro && !ov) IntroOverlay(onDone: () => setState(() => _intro = false)),
           ]);

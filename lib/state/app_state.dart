@@ -27,6 +27,17 @@ class AppState extends ChangeNotifier {
 
   /// Now Playing right side: true = lyrics, false = queue.
   bool lyricsTab = true;
+
+  /// User-tuned lyrics sync shift in ms (positive = lines appear earlier).
+  int lyricsOffset = 0;
+  Future<void> shiftLyrics(int deltaMs) async {
+    lyricsOffset = (lyricsOffset + deltaMs).clamp(-5000, 5000);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lyrics_offset', lyricsOffset);
+  }
+
+  Duration get lyricsTime => player.position.value + Duration(milliseconds: lyricsOffset);
   void setLyricsTab(bool v) {
     lyricsTab = v;
     notifyListeners();
@@ -59,6 +70,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> boot() async {
     final prefs = await SharedPreferences.getInstance();
+    lyricsOffset = prefs.getInt('lyrics_offset') ?? 0;
     final token = prefs.getString(_tokenKey);
     if (token != null && token.isNotEmpty) {
       try {
