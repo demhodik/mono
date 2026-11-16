@@ -121,7 +121,7 @@ class BottomBar extends StatelessWidget {
         final p = app.player;
         final t = p.current;
         final w = MediaQuery.sizeOf(context).width;
-        final wide = w > 1250;
+        final wide = w > 1700;
         var kind = app.route.kind;
         if (kind == PageKind.playlist || kind == PageKind.album || kind == PageKind.artist) kind = PageKind.library;
         return ConstrainedBox(
@@ -137,11 +137,13 @@ class BottomBar extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 9),
                   child: Row(children: [
                     // ---- mini player ----
-                    Expanded(
+                    SizedBox(
+                      width: w > 1300 ? 270 : 210,
                       child: t == null
                           ? const Padding(
                               padding: EdgeInsets.only(left: 12),
-                              child: Text('Включи что-нибудь', style: TextStyle(color: C.sub, fontSize: 13)),
+                              child: Text('Включи что-нибудь',
+                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.sub, fontSize: 13)),
                             )
                           : MouseRegion(
                               cursor: SystemMouseCursors.click,
@@ -211,14 +213,23 @@ class BottomBar extends StatelessWidget {
                     if (t != null) LikeButton(track: t, size: 19),
                     _sep(),
                     // ---- navigation ----
-                    for (final tab in tabs)
-                      _NavTab(
-                        icon: tab.$2,
-                        label: tab.$3,
-                        active: kind == tab.$1,
-                        showLabel: wide || kind == tab.$1,
-                        onTap: () => app.go(tab.$1),
+                    Expanded(
+                      child: Center(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            for (final tab in tabs)
+                              _NavTab(
+                                icon: tab.$2,
+                                label: tab.$3,
+                                active: kind == tab.$1,
+                                showLabel: wide || kind == tab.$1,
+                                onTap: () => app.go(tab.$1),
+                              ),
+                          ]),
+                        ),
                       ),
+                    ),
                     _sep(),
                     // ---- volume ----
                     HoverIcon(

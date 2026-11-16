@@ -262,11 +262,18 @@ class Stage extends StatelessWidget {
                 ]),
                 const SizedBox(height: 18),
                 Wrap(spacing: 8, runSpacing: 8, children: [
-                  GlassButton(
-                    active: app.stageView == 1,
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                    onTap: () => app.setStageView(1),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.lyrics_rounded, size: 17), SizedBox(width: 7), Text('Текст')]),
+                  LyricsLoader(
+                    key: ValueKey('lb${t.id}'),
+                    track: t,
+                    loading: const SizedBox.shrink(),
+                    builder: (context, l) => l.isEmpty
+                        ? const SizedBox.shrink()
+                        : GlassButton(
+                            active: app.stageView == 1,
+                            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                            onTap: () => app.setStageView(1),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.lyrics_rounded, size: 17), SizedBox(width: 7), Text('Текст')]),
+                          ),
                   ),
                   GlassButton(
                     active: app.stageView == 2,
@@ -369,7 +376,17 @@ class _StageCard extends StatelessWidget {
         opacity: 0.08,
         blur: 30,
         padding: const EdgeInsets.fromLTRB(28, 0, 20, 0),
-        child: LyricsView(track: t),
+        child: LyricsLoader(
+          track: t,
+          builder: (context, l) {
+            if (l.isEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (app.stageView == 1) app.setStageView(0);
+              });
+            }
+            return LyricsView(track: t);
+          },
+        ),
       );
     } else if (view == 2) {
       final up = app.player.queue.skip(app.player.index + 1).take(40).toList();
