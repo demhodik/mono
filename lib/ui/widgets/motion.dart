@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../state/app_state.dart';
+
 /// Fades + slides a child in once, after an optional delay (for staggered lists).
 class FadeSlideIn extends StatefulWidget {
   final Widget child;
@@ -242,6 +244,12 @@ class _SmoothScrollViewState extends State<SmoothScrollView> {
   Widget build(BuildContext context) {
     return Listener(
       onPointerSignal: _onSignal,
+      onPointerPanZoomUpdate: (e) {
+        if (!_c.hasClients) return;
+        final pos = _c.position;
+        _target = null;
+        _c.jumpTo((pos.pixels - e.panDelta.dy).clamp(pos.minScrollExtent, pos.maxScrollExtent).toDouble());
+      },
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: CustomScrollView(
@@ -252,4 +260,95 @@ class _SmoothScrollViewState extends State<SmoothScrollView> {
       ),
     );
   }
+}
+
+/// Part of the launch choreography: stays hidden until the intro hands over,
+/// then glides in from [from] (pixels) after [delayMs].
+class Entrance extends StatefulWidget {
+  final Widget child;
+  final Offset from;
+  final int delayMs;
+  final Curve curve;
+  const Entrance({super.key, required this.child, required this.from, this.delayMs = 0, this.curve = Curves.easeOutCubic});
+
+  @override
+  State<Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<Entrance> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900), value: app.revealed.value ? 1 : 0);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!app.revealed.value) app.revealed.addListener(_go);
+  }
+
+  void _go() {
+    if (!app.revealed.value) return;
+    app.revealed.removeListener(_go);
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    app.revealed.removeListener(_go);
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) {
+        if (_c.value >= 1) return child!;
+        final v = widget.curve.transform(_c.value);
+        return Opacity(
+          opacity: Curves.easeOut.transform(_c.value).clamp(0.0, 1.0),
+          child: Transform.translate(offset: widget.from * (1 - v), child: child),
+        );
+      },
+    );
+  }
+}
+
+/// Play ⇄ pause with a real morph.
+class PlayPauseIcon extends StatefulWidget {
+  final bool playing;
+  final double? size;
+  final Color? color;
+  const PlayPauseIcon({super.key, required this.playing, this.size, this.color});
+
+  @override
+  State<PlayPauseIcon> createState() => _PlayPauseIconState();
+}
+
+class _PlayPauseIconState extends State<PlayPauseIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 280), value: widget.playing ? 1 : 0);
+
+  @override
+  void didUpdateWidget(PlayPauseIcon old) {
+    super.didUpdateWidget(old);
+    if (old.playing != widget.playing) widget.playing ? _c.forward() : _c.reverse();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedIcon(
+        icon: AnimatedIcons.play_pause,
+        progress: CurvedAnimation(parent: _c, curve: Curves.easeInOutCubic),
+        size: widget.size,
+        color: widget.color,
+      );
 }

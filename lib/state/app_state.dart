@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +15,7 @@ final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 /// Global app state (single user, personal app).
 late final AppState app;
 
-enum PageKind { home, search, library, likes, wave, chart, releases, album, playlist }
+enum PageKind { home, search, library, likes, wave, chart, releases, album, playlist, artist }
 
 class AppRoute {
   final PageKind kind;
@@ -24,6 +27,32 @@ class AppState extends ChangeNotifier {
   YandexApi? api;
   late final PlayerController player = PlayerController(this);
   final overlay = GameOverlay();
+
+  /// Flips to true when the launch animation hands over to the UI.
+  final revealed = ValueNotifier<bool>(false);
+  final searchFocus = FocusNode();
+
+  /// +1 = navigating forward, -1 = back (drives page transition direction).
+  int navDir = 1;
+
+  // ----- listening history (local) -----
+  List<Track> history = [];
+
+  void _recordHistory(Track t) {
+    history.removeWhere((e) => e.id == t.id);
+    history.insert(0, t);
+    if (history.length > 60) history.removeRange(60, history.length);
+    SharedPreferences.getInstance()
+        .then((p) => p.setString('history', jsonEncode([for (final h in history) h.toJson()])));
+  }
+
+  Timer? _volTimer;
+  void volumeChanged() {
+    _volTimer?.cancel();
+    _volTimer = Timer(const Duration(milliseconds: 600), () async {
+      (await SharedPreferences.getInstance()).setDouble('volume', player.volume);
+    });
+  }
 
   /// Now Playing right side: true = lyrics, false = queue.
   bool lyricsTab = true;
@@ -71,6 +100,12 @@ class AppState extends ChangeNotifier {
   Future<void> boot() async {
     final prefs = await SharedPreferences.getInstance();
     lyricsOffset = prefs.getInt('lyrics_offset') ?? 0;
+    final vol = prefs.getDouble('volume');
+    if (vol != null) player.setVolume(vol);
+    try {
+      final h = jsonDecode(prefs.getString('history') ?? '[]');
+      if (h is List) history = h.map(Track.fromJson).whereType<Track>().toList();
+    } catch (_) {}
     final token = prefs.getString(_tokenKey);
     if (token != null && token.isNotEmpty) {
       try {
@@ -104,6 +139,13 @@ class AppState extends ChangeNotifier {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    await player.stop();
+    nowPlaying = false;
+    _history
+      ..clear()
+      ..add(const AppRoute(PageKind.home));
+    _pos = 0;
+    _likedArtists = null;
     api = null;
     likedIds = {};
     playlists = [];
@@ -128,18 +170,21 @@ class AppState extends ChangeNotifier {
   void go(PageKind kind, [Object? arg]) {
     final wasOpen = nowPlaying;
     nowPlaying = false;
-    if (route.kind == kind && route.arg == arg && kind != PageKind.search) {
+    if (route.kind == kind && route.arg == arg) {
       if (wasOpen) notifyListeners();
       return;
     }
     _history.removeRange(_pos + 1, _history.length);
     _history.add(AppRoute(kind, arg));
     _pos = _history.length - 1;
+    navDir = 1;
     notifyListeners();
   }
 
   void back() {
     if (canBack) {
+      navDir = -1;
+      nowPlaying = false;
       _pos--;
       notifyListeners();
     }
@@ -147,6 +192,7 @@ class AppState extends ChangeNotifier {
 
   void forward() {
     if (canForward) {
+      navDir = 1;
       _pos++;
       notifyListeners();
     }
@@ -165,12 +211,16 @@ class AppState extends ChangeNotifier {
 
   bool isLiked(Track t) => likedIds.contains(t.id);
 
+  /// Bumped whenever likes change so the likes page can reload.
+  int likesRev = 0;
+
   Future<void> toggleLike(Track t) async {
     final like = !isLiked(t);
     like ? likedIds.add(t.id) : likedIds.remove(t.id);
     notifyListeners();
     try {
       await api!.setLike(t.id, like);
+      likesRev++;
     } catch (e) {
       like ? likedIds.remove(t.id) : likedIds.add(t.id);
       notifyListeners();
@@ -254,7 +304,31 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Endless radio built around one track.
+  Future<void> startTrackWave(Track t) async {
+    final a = api!;
+    final st = 'track:${t.id}';
+    try {
+      final tracks = await a.waveTracks(station: st);
+      await player.playList([t, ...tracks.where((x) => x.id != t.id)], 0,
+          source: 'radio:${t.id}', loadMore: (last) => a.waveTracks(station: st, lastTrackId: last.id));
+    } catch (e) {
+      toast('Не удалось запустить волну по треку: $e');
+    }
+  }
+
+  void openAlbumOf(Track t) {
+    if (t.albumId == null) return;
+    go(PageKind.album, Album(id: t.albumId!, title: t.albumTitle.isEmpty ? t.title : t.albumTitle, artists: t.artists, cover: t.cover));
+  }
+
+  void openArtistOf(Track t) {
+    if (t.artistRefs.isEmpty) return;
+    go(PageKind.artist, t.artistRefs.first);
+  }
+
   void onTrackStarted(Track t, String? source) {
+    _recordHistory(t);
     if (source == 'wave') api?.waveFeedback('trackStarted', track: t);
   }
 

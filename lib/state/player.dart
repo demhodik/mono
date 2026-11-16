@@ -24,12 +24,15 @@ class PlayerController extends ChangeNotifier {
         position.value = p;
         // fallback end detection: some files never emit `completed`
         final d = duration.value;
-        if (playing && !loading && d > const Duration(seconds: 2) && p >= d - const Duration(milliseconds: 350)) {
+        if (playing && !loading && _realDuration && d > const Duration(seconds: 2) && p >= d - const Duration(milliseconds: 250)) {
           _onEnded();
         }
       }),
       _player.stream.duration.listen((d) {
-        if (d > Duration.zero) duration.value = d;
+        if (d > Duration.zero) {
+          duration.value = d;
+          _realDuration = true;
+        }
       }),
       _player.stream.completed.listen((done) {
         if (done && !loading) _onEnded();
@@ -99,6 +102,7 @@ class PlayerController extends ChangeNotifier {
     final track = queue[i];
     final req = ++_request;
     loading = true;
+    _realDuration = false;
     position.value = Duration.zero;
     duration.value = track.duration;
     notifyListeners();
@@ -125,6 +129,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   int _endedFor = -1;
+  bool _realDuration = false;
 
   void _onEnded() {
     if (_endedFor == _request) return; // already handled for this track
@@ -183,16 +188,87 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> playAt(int i) => _playIndex(i);
 
+  Future<void> stop() async {
+    _request++;
+    await _player.stop();
+    queue = [];
+    _ordered = [];
+    index = -1;
+    loading = false;
+    source = null;
+    _loadMore = null;
+    position.value = Duration.zero;
+    duration.value = Duration.zero;
+    notifyListeners();
+  }
+
+  /// Inserts a track right after the current one.
+  void playNext(Track t) {
+    if (current == null) {
+      playList([t], 0, source: 'single');
+      return;
+    }
+    queue.removeWhere((e) => e.id == t.id && e.id != current!.id);
+    index = queue.indexWhere((e) => e.id == current!.id).clamp(0, queue.length - 1);
+    queue.insert(index + 1, t);
+    _ordered.removeWhere((e) => e.id == t.id);
+    final oi = _ordered.indexWhere((e) => e.id == current!.id);
+    _ordered.insert(oi < 0 ? _ordered.length : oi + 1, t);
+    notifyListeners();
+  }
+
+  void enqueue(Track t) {
+    if (current == null) {
+      playList([t], 0, source: 'single');
+      return;
+    }
+    if (queue.any((e) => e.id == t.id)) return;
+    queue.add(t);
+    _ordered.add(t);
+    notifyListeners();
+  }
+
+  void removeAt(int i) {
+    if (i <= index || i >= queue.length) return;
+    final t = queue.removeAt(i);
+    _ordered.removeWhere((e) => e.id == t.id);
+    notifyListeners();
+  }
+
+  // ----- sleep timer -----
+  DateTime? sleepAt;
+  Timer? _sleepTimer;
+
+  void setSleep(Duration? d) {
+    _sleepTimer?.cancel();
+    sleepAt = d == null ? null : DateTime.now().add(d);
+    if (d != null) {
+      _sleepTimer = Timer(d, () {
+        sleepAt = null;
+        _player.pause();
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
+
   Future<void> toggle() async {
-    if (current == null) return;
+    if (current == null || loading) return;
     await _player.playOrPause();
   }
 
-  Future<void> seek(Duration d) => _player.seek(d);
+  Future<void> seek(Duration d) async {
+    if (current == null || loading) return;
+    if (d < Duration.zero) d = Duration.zero;
+    position.value = d;
+    _endedFor = -1;
+    await _player.seek(d);
+  }
 
   void setVolume(double v) {
-    volume = v.clamp(0, 100);
+    volume = v.clamp(0, 100).toDouble();
     _player.setVolume(volume);
+    app.volumeChanged();
     notifyListeners();
   }
 

@@ -308,7 +308,7 @@ class WaveSection extends StatelessWidget {
                   iconSize: 24,
                   onTap: onWave ? p.toggle : app.startWave,
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                    PlayPauseIcon(playing: playing),
                     const SizedBox(width: 8),
                     Text(onWave ? (playing ? 'Пауза' : 'Продолжить') : 'Слушать'),
                   ]),
@@ -473,24 +473,13 @@ class LibraryPage extends StatelessWidget {
                 onOpen: () => app.go(PageKind.likes),
               );
             }
-            final p = app.playlists[i - 1];
-            return MediaCard(
-              image: p.coverOf(300),
-              fallback: Icons.queue_music_rounded,
-              title: p.title,
-              subtitle: plural(p.trackCount, 'трек', 'трека', 'треков'),
-              onOpen: () => app.go(PageKind.playlist, p),
-              onPlay: () async {
-                try {
-                  final t = await app.api!.playlistTracks(p);
-                  app.player.playList(t, 0, source: 'playlist:${p.kind}');
-                } catch (e) {
-                  app.toast('$e');
-                }
-              },
-            );
+            return _playlistCard(app.playlists[i - 1]);
           },
         ),
+        if (app.history.isNotEmpty) ...[
+          const SliverToBoxAdapter(child: SectionTitle('Недавно слушал')),
+          TrackSliver(tracks: app.history.take(20).toList(), source: 'history'),
+        ],
         const SliverToBoxAdapter(child: SizedBox(height: 140)),
       ]),
     );
@@ -560,7 +549,7 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   Timer? _debounce;
   String _query = '';
-  Future<List<Track>>? _future;
+  Future<SearchResult>? _future;
 
   @override
   void initState() {
@@ -572,11 +561,11 @@ class _SearchPageState extends State<SearchPage> {
   void _onApp() {
     if (app.searchQuery == _query) return;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
+    _debounce = Timer(const Duration(milliseconds: 320), () {
       if (!mounted) return;
       setState(() {
         _query = app.searchQuery;
-        _future = _query.trim().isEmpty ? null : app.api!.search(_query.trim());
+        _future = _query.trim().isEmpty ? null : app.api!.searchAll(_query.trim());
       });
     });
   }
@@ -588,52 +577,234 @@ class _SearchPageState extends State<SearchPage> {
     super.dispose();
   }
 
+  Widget _row(double height, int count, Widget Function(int) item, double width) => SliverToBoxAdapter(
+        child: SizedBox(
+          height: height,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            itemCount: count,
+            itemBuilder: (_, i) => SizedBox(width: width, child: FadeSlideIn.index(i, child: item(i))),
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     if (_future == null) {
       const genres = ['Фонк', 'Рэп', 'Рок', 'Lo-fi', 'Электроника', 'Инди', 'Поп', 'Джаз', 'Синтвейв', 'Метал'];
       return Center(
-        child: FadeSlideIn(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Поиск',
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const FadeSlideIn(
+              child: Text('Поиск',
                   style: TextStyle(fontFamily: 'Unbounded', fontSize: 52, fontWeight: FontWeight.w700, letterSpacing: -1.5)),
-              const SizedBox(height: 8),
-              const Text('Трек, артист или альбом — пиши в строке сверху. Или начни с жанра:',
+            ),
+            const SizedBox(height: 8),
+            const FadeSlideIn(
+              delay: Duration(milliseconds: 80),
+              child: Text('Треки, артисты, альбомы и плейлисты. Или начни с жанра:',
                   style: TextStyle(color: C.sub, fontSize: 16)),
-              const SizedBox(height: 24),
-              Wrap(spacing: 10, runSpacing: 10, children: [
-                for (var i = 0; i < genres.length; i++)
-                  FadeSlideIn.index(
-                    i,
-                    dy: 12,
-                    child: GlassButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                      onTap: () => app.search(genres[i]),
-                      child: Text(genres[i], style: const TextStyle(fontSize: 15)),
-                    ),
+            ),
+            const SizedBox(height: 24),
+            Wrap(spacing: 10, runSpacing: 10, children: [
+              for (var i = 0; i < genres.length; i++)
+                FadeSlideIn.index(
+                  i + 2,
+                  dy: 14,
+                  child: GlassButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                    onTap: () => app.search(genres[i]),
+                    child: Text(genres[i], style: const TextStyle(fontSize: 15)),
                   ),
-              ]),
+                ),
             ]),
-          ),
+          ]),
         ),
       );
     }
-    return FutureBuilder<List<Track>>(
+    return FutureBuilder<SearchResult>(
       future: _future,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}', style: const TextStyle(color: C.sub)));
         if (!snap.hasData) return const Center(child: GlassSpinner());
-        final tracks = snap.data!;
+        final r = snap.data!;
+        if (r.isEmpty) {
+          return Center(child: Text('По запросу «$_query» ничего не нашлось', style: const TextStyle(color: C.sub)));
+        }
+        return SmoothScrollView(key: ValueKey(_query), slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 18, 32, 0),
+              child: Text('«$_query»',
+                  style: const TextStyle(fontFamily: 'Unbounded', fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
+            ),
+          ),
+          if (r.artists.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Артисты')),
+            _row(196, r.artists.length.clamp(0, 12), (i) => ArtistBubble(artist: r.artists[i]), 160),
+          ],
+          if (r.tracks.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Треки')),
+            TrackSliver(tracks: r.tracks.take(8).toList(), source: 'search:$_query'),
+          ],
+          if (r.albums.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Альбомы')),
+            _row(290, r.albums.length.clamp(0, 14), (i) => _albumCard(r.albums[i]), 210),
+          ],
+          if (r.playlists.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Плейлисты')),
+            _row(290, r.playlists.length.clamp(0, 14), (i) => _playlistCard(r.playlists[i]), 210),
+          ],
+          if (r.tracks.length > 8) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Ещё треки')),
+            TrackSliver(tracks: r.tracks.skip(8).toList(), source: 'search2:$_query'),
+          ],
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
+        ]);
+      },
+    );
+  }
+}
+
+Widget _playlistCard(Playlist p) => MediaCard(
+      image: p.coverOf(300),
+      fallback: Icons.queue_music_rounded,
+      title: p.title,
+      subtitle: plural(p.trackCount, 'трек', 'трека', 'треков'),
+      onOpen: () => app.go(PageKind.playlist, p),
+      onPlay: () async {
+        try {
+          final t = await app.api!.playlistTracks(p);
+          app.player.playList(t, 0, source: 'playlist:${p.kind}');
+        } catch (e) {
+          app.toast('$e');
+        }
+      },
+    );
+
+/// Round artist avatar with a name.
+class ArtistBubble extends StatefulWidget {
+  final Artist artist;
+  const ArtistBubble({super.key, required this.artist});
+  @override
+  State<ArtistBubble> createState() => _ArtistBubbleState();
+}
+
+class _ArtistBubbleState extends State<ArtistBubble> {
+  bool _hover = false;
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.artist;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: () => app.go(PageKind.artist, ArtistRef(a.id, a.name)),
+        child: Column(children: [
+          const SizedBox(height: 8),
+          AnimatedScale(
+            scale: _hover ? 1.07 : 1,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: _hover ? 0.7 : 0.14), width: 1.5),
+                boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: _hover ? 0.18 : 0), blurRadius: 26)],
+              ),
+              child: Cover(a.coverOf(200), size: 124, radius: 999, fallback: Icons.person_rounded),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(a.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ======================= ARTIST =======================
+
+class ArtistPage extends StatelessWidget {
+  final ArtistRef ref;
+  const ArtistPage(this.ref, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final source = 'artist:${ref.id}';
+    return Loader<ArtistInfo>(
+      load: () => app.api!.artist(ref.id),
+      builder: (context, info) {
+        final name = info.artist.name.isEmpty ? ref.name : info.artist.name;
         return SmoothScrollView(slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 18, 32, 12),
-              child: Text('«$_query»', style: const TextStyle(fontFamily: 'Unbounded', fontSize: 25.2, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
+              padding: const EdgeInsets.fromLTRB(32, 24, 32, 20),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                FadeSlideIn(
+                  child: Tilt3D(
+                    radius: 999,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 40, offset: const Offset(0, 18)),
+                        ],
+                      ),
+                      child: Cover(info.artist.coverOf(400), size: 210, radius: 999, fallback: Icons.person_rounded),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 30),
+                Expanded(
+                  child: FadeSlideIn(
+                    delay: const Duration(milliseconds: 120),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('АРТИСТ',
+                          style: TextStyle(fontSize: 12, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Text(name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: 'Unbounded',
+                              fontSize: name.length > 18 ? 34 : 50,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -1,
+                              height: 1.05)),
+                      const SizedBox(height: 12),
+                      Text(
+                          '${plural(info.albums.length, 'релиз', 'релиза', 'релизов')} · популярное: ${plural(info.popular.length, 'трек', 'трека', 'треков')}',
+                          style: const TextStyle(color: C.sub)),
+                    ]),
+                  ),
+                ),
+              ]),
             ),
           ),
-          TrackSliver(key: ValueKey(_query), tracks: tracks, source: 'search:$_query'),
+          SliverToBoxAdapter(child: PlayActions(tracks: info.popular, source: source)),
+          if (info.popular.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Популярное')),
+            TrackSliver(tracks: info.popular.take(10).toList(), source: source),
+          ],
+          if (info.albums.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SectionTitle('Альбомы и синглы')),
+            CardGrid(count: info.albums.length, item: (i) => _albumCard(info.albums[i])),
+          ],
           const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ]);
       },

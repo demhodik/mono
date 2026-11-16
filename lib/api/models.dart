@@ -12,6 +12,16 @@ String _artists(dynamic list) {
       .join(', ');
 }
 
+class ArtistRef {
+  final String id;
+  final String name;
+  const ArtistRef(this.id, this.name);
+  @override
+  bool operator ==(Object o) => o is ArtistRef && o.id == id;
+  @override
+  int get hashCode => id.hashCode;
+}
+
 class Track {
   final String id;
   final String title;
@@ -22,6 +32,8 @@ class Track {
   final bool available;
   final bool hasSyncLyrics;
   final bool hasLyrics;
+  final List<ArtistRef> artistRefs;
+  final String albumTitle;
 
   Track({
     required this.id,
@@ -33,6 +45,8 @@ class Track {
     this.available = true,
     this.hasSyncLyrics = false,
     this.hasLyrics = false,
+    this.artistRefs = const [],
+    this.albumTitle = '',
   });
 
   String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
@@ -43,9 +57,17 @@ class Track {
     if (id == null) return null;
     final albums = j['albums'];
     String? albumId;
+    var albumTitle = '';
     String? cover = j['coverUri']?.toString();
+    final refs = <ArtistRef>[];
+    if (j['artists'] is List) {
+      for (final a in j['artists']) {
+        if (a is Map && a['id'] != null) refs.add(ArtistRef(a['id'].toString(), a['name']?.toString() ?? ''));
+      }
+    }
     if (albums is List && albums.isNotEmpty && albums.first is Map) {
       albumId = albums.first['id']?.toString();
+      albumTitle = albums.first['title']?.toString() ?? '';
       cover ??= albums.first['coverUri']?.toString();
     }
     var title = j['title']?.toString() ?? 'Без названия';
@@ -59,17 +81,37 @@ class Track {
       cover: cover ?? j['ogImage']?.toString(),
       duration: Duration(milliseconds: (j['durationMs'] as num?)?.toInt() ?? 0),
       available: j['available'] != false,
+      artistRefs: refs,
+      albumTitle: albumTitle,
       hasSyncLyrics: j['lyricsInfo'] is Map && j['lyricsInfo']['hasAvailableSyncLyrics'] == true,
       hasLyrics: j['lyricsInfo'] is Map &&
           (j['lyricsInfo']['hasAvailableTextLyrics'] == true || j['lyricsInfo']['hasAvailableSyncLyrics'] == true),
     );
   }
 
+  /// Same shape the API uses, so history can be restored with [fromJson].
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'artists': [
+          for (final a in artistRefs) {'id': a.id, 'name': a.name},
+        ],
+        'albums': [
+          if (albumId != null) {'id': albumId, 'title': albumTitle},
+        ],
+        'coverUri': cover,
+        'durationMs': duration.inMilliseconds,
+      };
+
   /// Full id used by some endpoints: "trackId:albumId".
   String get fullId => albumId == null ? id : '$id:$albumId';
 }
 
 class Album {
+  @override
+  bool operator ==(Object o) => o is Album && o.id == id;
+  @override
+  int get hashCode => id.hashCode;
   final String id;
   final String title;
   final String artists;
@@ -93,6 +135,10 @@ class Album {
 }
 
 class Playlist {
+  @override
+  bool operator ==(Object o) => o is Playlist && o.kind == kind && o.owner == owner;
+  @override
+  int get hashCode => Object.hash(kind, owner);
   final String kind;
   final String owner;
   final String title;
@@ -178,4 +224,38 @@ class Lyrics {
     }
     return ans;
   }
+}
+
+class Artist {
+  final String id;
+  final String name;
+  final String? cover;
+  const Artist({required this.id, required this.name, this.cover});
+  String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
+
+  static Artist? fromJson(dynamic j) {
+    if (j is! Map || j['id'] == null) return null;
+    final c = j['cover'];
+    return Artist(
+      id: j['id'].toString(),
+      name: j['name']?.toString() ?? '',
+      cover: (c is Map ? c['uri']?.toString() : null) ?? j['ogImage']?.toString(),
+    );
+  }
+}
+
+class ArtistInfo {
+  final Artist artist;
+  final List<Track> popular;
+  final List<Album> albums;
+  const ArtistInfo(this.artist, this.popular, this.albums);
+}
+
+class SearchResult {
+  final List<Track> tracks;
+  final List<Album> albums;
+  final List<Artist> artists;
+  final List<Playlist> playlists;
+  const SearchResult({this.tracks = const [], this.albums = const [], this.artists = const [], this.playlists = const []});
+  bool get isEmpty => tracks.isEmpty && albums.isEmpty && artists.isEmpty && playlists.isEmpty;
 }

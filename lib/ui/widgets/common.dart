@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../api/models.dart';
@@ -246,7 +248,7 @@ class PlayActions extends StatelessWidget {
               iconSize: 26,
               onTap: tracks.isEmpty ? null : () => isThis ? p.toggle() : p.playList(tracks, 0, source: source),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(isThis && p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                PlayPauseIcon(playing: isThis && p.playing),
                 const SizedBox(width: 8),
                 Text(isThis && p.playing ? 'Пауза' : 'Слушать', style: const TextStyle(fontSize: 15)),
               ]),
@@ -333,6 +335,7 @@ class _TrackRowState extends State<TrackRow> {
           onExit: (_) => setState(() => _hover = false),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            onSecondaryTapUp: (d) => showTrackMenu(context, d.globalPosition, t),
             onTap: () => current ? p.toggle() : p.playList(widget.tracks, widget.index, source: widget.source),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
@@ -380,8 +383,18 @@ class _TrackRowState extends State<TrackRow> {
                     child: AnimatedOpacity(
                       opacity: (liked || _hover) ? 1 : 0,
                       duration: const Duration(milliseconds: 150),
-                      child: HoverIcon(liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          size: 18, active: liked, onTap: () => app.toggleLike(t)),
+                      child: LikeButton(track: t, size: 18),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 34,
+                    child: AnimatedOpacity(
+                      opacity: _hover ? 1 : 0,
+                      duration: const Duration(milliseconds: 150),
+                      child: HoverIcon(Icons.more_horiz_rounded, size: 18, onTap: () {
+                        final box = context.findRenderObject() as RenderBox;
+                        showTrackMenu(context, box.localToGlobal(Offset(box.size.width - 260, box.size.height / 2)), t);
+                      }),
                     ),
                   ),
                   SizedBox(
@@ -529,5 +542,141 @@ class CardGrid extends StatelessWidget {
         itemBuilder: (_, i) => FadeSlideIn.index(i, child: item(i)),
       ),
     );
+  }
+}
+
+/// Heart with a pop + particle burst when a track gets liked.
+class LikeButton extends StatefulWidget {
+  final Track track;
+  final double size;
+  const LikeButton({super.key, required this.track, this.size = 20});
+
+  @override
+  State<LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<LikeButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 650), value: 1);
+  bool _hover = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([app, _c]),
+      builder: (context, _) {
+        final liked = app.isLiked(widget.track);
+        final v = _c.value;
+        final scale = v >= 1 ? 1.0 : 0.55 + 0.45 * Curves.elasticOut.transform(v);
+        return Tooltip(
+          message: liked ? 'Убрать лайк' : 'Мне нравится',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hover = true),
+            onExit: (_) => setState(() => _hover = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (!liked) _c.forward(from: 0);
+                app.toggleLike(widget.track);
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: CustomPaint(
+                  painter: v < 1 ? _BurstPainter(v) : null,
+                  child: Transform.scale(
+                    scale: scale * (_hover && v >= 1 ? 1.12 : 1),
+                    child: Icon(
+                      liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      size: widget.size,
+                      color: liked || _hover ? Colors.white : const Color(0xFF9A9A9A),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BurstPainter extends CustomPainter {
+  final double v;
+  _BurstPainter(this.v);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide;
+    final e = Curves.easeOutCubic.transform(v);
+    canvas.drawCircle(
+      c,
+      r * (0.4 + e * 0.9),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2 * (1 - e)
+        ..color = Colors.white.withValues(alpha: (1 - e) * 0.9),
+    );
+    final dot = Paint()..color = Colors.white.withValues(alpha: (1 - v).clamp(0.0, 1.0));
+    for (var i = 0; i < 8; i++) {
+      final a = i / 8 * 2 * math.pi + 0.4;
+      canvas.drawCircle(c + Offset(math.cos(a), math.sin(a)) * r * (0.6 + e * 1.0), 1.8 * (1 - e) + 0.4, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BurstPainter o) => o.v != v;
+}
+
+PopupMenuItem<String> _menuItem(String value, IconData icon, String label) => PopupMenuItem<String>(
+      value: value,
+      height: 42,
+      child: Row(children: [
+        Icon(icon, size: 18, color: Colors.white),
+        const SizedBox(width: 12),
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      ]),
+    );
+
+/// Right-click / "⋯" menu for any track.
+Future<void> showTrackMenu(BuildContext context, Offset pos, Track t) async {
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  final liked = app.isLiked(t);
+  final v = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromRect(pos & const Size(1, 1), Offset.zero & overlay.size),
+    items: [
+      _menuItem('next', Icons.playlist_play_rounded, 'Играть следующим'),
+      _menuItem('queue', Icons.queue_music_rounded, 'Добавить в очередь'),
+      _menuItem('radio', Icons.waves_rounded, 'Волна по треку'),
+      const PopupMenuDivider(height: 8),
+      if (t.artistRefs.isNotEmpty) _menuItem('artist', Icons.person_rounded, 'К артисту'),
+      if (t.albumId != null) _menuItem('album', Icons.album_rounded, 'К альбому'),
+      _menuItem('like', liked ? Icons.favorite_rounded : Icons.favorite_border_rounded, liked ? 'Убрать лайк' : 'Мне нравится'),
+    ],
+  );
+  switch (v) {
+    case 'next':
+      app.player.playNext(t);
+      app.toast('Сыграет следующим: ${t.title}');
+    case 'queue':
+      app.player.enqueue(t);
+      app.toast('Добавлено в очередь: ${t.title}');
+    case 'radio':
+      app.startTrackWave(t);
+    case 'artist':
+      app.openArtistOf(t);
+    case 'album':
+      app.openAlbumOf(t);
+    case 'like':
+      app.toggleLike(t);
   }
 }

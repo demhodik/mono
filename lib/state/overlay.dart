@@ -11,6 +11,9 @@ import '../log.dart';
 /// karaoke strip over games, and back. Global hotkey: Ctrl+Shift+L.
 class GameOverlay extends ChangeNotifier {
   bool active = false;
+
+  /// Set by the app: 'toggle' | 'next' | 'prev'.
+  void Function(String action)? onMedia;
   bool _busy = false;
   Rect? _saved;
   bool _wasMaximized = false;
@@ -27,6 +30,19 @@ class GameOverlay extends ChangeNotifier {
       await hotKeyManager.register(_hotKey, keyDownHandler: (_) => toggle());
     } catch (e) {
       Log.w('hotkey: $e');
+    }
+    // hardware media keys (work even when Mono is in the background)
+    final media = <PhysicalKeyboardKey, void Function()>{
+      PhysicalKeyboardKey.mediaPlayPause: () => onMedia?.call('toggle'),
+      PhysicalKeyboardKey.mediaTrackNext: () => onMedia?.call('next'),
+      PhysicalKeyboardKey.mediaTrackPrevious: () => onMedia?.call('prev'),
+    };
+    for (final e in media.entries) {
+      try {
+        await hotKeyManager.register(HotKey(key: e.key, scope: HotKeyScope.system), keyDownHandler: (_) => e.value());
+      } catch (err) {
+        Log.w('media key: $err');
+      }
     }
   }
 

@@ -139,6 +139,30 @@ class YandexApi {
     return _tracks(tracks is Map ? tracks['results'] : null);
   }
 
+  Future<SearchResult> searchAll(String text) async {
+    final r = await _get('/search', {'text': text, 'type': 'all', 'page': '0', 'nocorrect': 'false'});
+    List res(String k) {
+      final m = r is Map ? r[k] : null;
+      final l = m is Map ? m['results'] : null;
+      return l is List ? l : const [];
+    }
+
+    return SearchResult(
+      tracks: _tracks(res('tracks')),
+      albums: res('albums').map(Album.fromJson).whereType<Album>().toList(),
+      artists: res('artists').map(Artist.fromJson).whereType<Artist>().toList(),
+      playlists: res('playlists').map(Playlist.fromJson).whereType<Playlist>().toList(),
+    );
+  }
+
+  Future<ArtistInfo> artist(String id) async {
+    final r = await _get('/artists/$id/brief-info');
+    if (r is! Map) throw ApiException('Артист не найден');
+    final a = Artist.fromJson(r['artist']) ?? Artist(id: id, name: '');
+    final albums = (r['albums'] is List ? r['albums'] as List : const []).map(Album.fromJson).whereType<Album>().toList();
+    return ArtistInfo(a, _tracks(r['popularTracks']), albums);
+  }
+
   Future<List<Playlist>> searchPlaylists(String text) async {
     final r = await _get('/search', {'text': text, 'type': 'playlist', 'page': '0', 'nocorrect': 'false'});
     final pl = r is Map ? r['playlists'] : null;
@@ -298,8 +322,8 @@ class YandexApi {
   }
 
   /// Next batch of wave tracks. Pass the last played id to continue the stream.
-  Future<List<Track>> waveTracks({String? lastTrackId}) async {
-    final r = await _get('/rotor/station/$_wave/tracks', {
+  Future<List<Track>> waveTracks({String? lastTrackId, String station = _wave}) async {
+    final r = await _get('/rotor/station/$station/tracks', {
       'settings2': 'true',
       if (lastTrackId != null) 'queue': lastTrackId,
     });

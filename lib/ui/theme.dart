@@ -38,10 +38,27 @@ ThemeData buildTheme() {
       radius: const Radius.circular(8),
       thickness: const WidgetStatePropertyAll(8),
     ),
-    snackBarTheme: const SnackBarThemeData(
-      backgroundColor: Colors.white,
-      contentTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: const Color(0xF2161616),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontFamily: 'Manrope'),
     ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: const Color(0xF4141414),
+      elevation: 18,
+      shadowColor: Colors.black,
+      menuPadding: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontFamily: 'Manrope'),
+    ),
+    dividerTheme: DividerThemeData(color: Colors.white.withValues(alpha: 0.1), thickness: 1),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: C.hover, borderRadius: BorderRadius.circular(6)),
       textStyle: const TextStyle(color: Colors.white, fontSize: 12),

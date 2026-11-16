@@ -138,3 +138,73 @@ class _SheenPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+/// Turntable tonearm that swings onto the record while playing.
+class Tonearm extends StatelessWidget {
+  final double length;
+  final bool playing;
+  const Tonearm({super.key, required this.length, required this.playing});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedRotation(
+      turns: playing ? 0.075 : 0.0,
+      alignment: Alignment.topRight,
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeInOutCubic,
+      child: CustomPaint(size: Size(length * 0.42, length), painter: _ArmPainter()),
+    );
+  }
+}
+
+class _ArmPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pivot = Offset(size.width - 14, 14);
+    final elbow = Offset(size.width - 14, size.height * 0.62);
+    final head = Offset(size.width * 0.18, size.height * 0.93);
+    final shadow = Paint()
+      ..color = Colors.black.withValues(alpha: 0.45)
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final arm = Paint()
+      ..shader = const LinearGradient(colors: [Color(0xFFF2F2F2), Color(0xFF8C8C8C)])
+          .createShader(Offset.zero & size)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..moveTo(pivot.dx, pivot.dy)
+      ..lineTo(elbow.dx, elbow.dy)
+      ..lineTo(head.dx, head.dy);
+    canvas.drawPath(path.shift(const Offset(3, 5)), shadow);
+    canvas.drawPath(path, arm);
+    // pivot base
+    canvas.drawCircle(pivot, 13, Paint()..color = const Color(0xFF1B1B1B));
+    canvas.drawCircle(
+        pivot,
+        13,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = Colors.white.withValues(alpha: 0.35));
+    canvas.drawCircle(pivot, 5, Paint()..color = const Color(0xFFDADADA));
+    // headshell
+    canvas.save();
+    canvas.translate(head.dx, head.dy);
+    canvas.rotate(0.62);
+    final r = RRect.fromRectAndRadius(const Rect.fromLTWH(-9, -6, 18, 26), const Radius.circular(4));
+    canvas.drawRRect(r, Paint()..color = const Color(0xFFEDEDED));
+    canvas.drawRRect(
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..color = Colors.black.withValues(alpha: 0.4));
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
