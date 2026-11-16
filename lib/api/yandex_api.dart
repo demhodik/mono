@@ -253,6 +253,22 @@ class YandexApi {
     return list.whereType<Map>().map((m) => m['id'].toString()).toList();
   }
 
+  Future<List<Album>> likedAlbums() async {
+    final r = await _get('/users/$uid/likes/albums', {'rich': 'true'});
+    return (r is List ? r : const [])
+        .map((e) => Album.fromJson(e is Map && e['album'] != null ? e['album'] : e))
+        .whereType<Album>()
+        .toList();
+  }
+
+  Future<List<Artist>> likedArtists() async {
+    final r = await _get('/users/$uid/likes/artists', {'with-timestamps': 'false'});
+    return (r is List ? r : const [])
+        .map((e) => Artist.fromJson(e is Map && e['artist'] != null ? e['artist'] : e))
+        .whereType<Artist>()
+        .toList();
+  }
+
   Future<List<Track>> likedTracks() async => tracksByIds(await likedIds());
 
   Future<void> setLike(String trackId, bool like) async {

@@ -295,8 +295,37 @@ class AppState extends ChangeNotifier {
 
   // ---------- Моя волна ----------
 
+  /// null = classic "Моя волна"; otherwise an activity station like 'activity:workout'.
+  String? waveActivity;
+
+  static const activities = {
+    'activity:wake-up': 'Просыпаюсь',
+    'activity:road-trip': 'В дороге',
+    'activity:work-background': 'Работаю',
+    'activity:workout': 'Тренируюсь',
+    'activity:fall-asleep': 'Засыпаю',
+  };
+
+  void setActivity(String? a) {
+    waveActivity = waveActivity == a ? null : a;
+    startWave();
+  }
+
   Future<void> startWave() async {
     final a = api!;
+    final act = waveActivity;
+    notifyListeners();
+    if (act != null) {
+      try {
+        final tracks = await a.waveTracks(station: act);
+        if (tracks.isEmpty) throw ApiException('пусто');
+        await player.playList(tracks, 0,
+            source: 'wave', loadMore: (last) => a.waveTracks(station: act, lastTrackId: last.id));
+      } catch (e) {
+        toast('Не удалось запустить волну: $e');
+      }
+      return;
+    }
     try {
       await a.setWaveSettings(waveSettings);
     } catch (_) {

@@ -165,10 +165,9 @@ class Sidebar extends StatelessWidget {
                 icon: Icons.favorite_rounded, label: 'Мне нравится', active: sel(PageKind.likes), onTap: () => app.go(PageKind.likes)),
             _SideTab(
                 icon: Icons.library_music_rounded,
-                label: 'Медиатека',
+                label: 'Коллекция',
                 active: sel(PageKind.library),
                 onTap: () => app.go(PageKind.library)),
-            _SideTab(icon: Icons.tune_rounded, label: 'Настроить волну', active: sel(PageKind.wave), onTap: () => app.go(PageKind.wave)),
             const SizedBox(height: 6),
             Expanded(
               child: ListView(padding: const EdgeInsets.only(bottom: 10), children: [
@@ -270,8 +269,9 @@ class PlayerBar extends StatelessWidget {
       builder: (context, _) {
         final p = app.player;
         final t = p.current;
-        return Container(
-          height: 84,
+        return Stack(children: [
+          Container(
+          height: 80,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -377,9 +377,14 @@ class PlayerBar extends StatelessWidget {
                   const SizedBox(width: 10),
                   HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
                       size: 19, active: p.repeat != Repeat.off, onTap: p.cycleRepeat, tooltip: 'Повтор'),
+                  const SizedBox(width: 14),
+                  if (t != null)
+                    ValueListenableBuilder<Duration>(
+                      valueListenable: p.position,
+                      builder: (context, pos, _) => Text('${fmt(pos)} / ${fmt(p.duration.value)}',
+                          style: const TextStyle(color: C.sub, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
+                    ),
                 ]),
-                const SizedBox(height: 4),
-                ConstrainedBox(constraints: const BoxConstraints(maxWidth: 620), child: const _BarProgress()),
               ]),
             ),
             // ---- extras ----
@@ -406,9 +411,95 @@ class PlayerBar extends StatelessWidget {
               ]),
             ),
           ]),
-        );
+          ),
+          if (t != null) const Positioned(left: 0, right: 0, top: 0, child: _TopSeek()),
+        ]);
       },
     );
+  }
+}
+
+/// Full-width seek line on the top edge of the player bar (Yandex-style).
+class _TopSeek extends StatefulWidget {
+  const _TopSeek();
+  @override
+  State<_TopSeek> createState() => _TopSeekState();
+}
+
+class _TopSeekState extends State<_TopSeek> {
+  double? _hoverX;
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = app.player;
+    return LayoutBuilder(builder: (context, c) {
+      Duration at(double x) => p.duration.value * (x / c.maxWidth).clamp(0.0, 1.0);
+      final hover = _hoverX != null || _drag != null;
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onHover: (e) => setState(() => _hoverX = e.localPosition.dx),
+        onExit: (_) => setState(() => _hoverX = null),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (e) => p.seek(at(e.localPosition.dx)),
+          onHorizontalDragUpdate: (e) => setState(() => _drag = e.localPosition.dx.clamp(0, c.maxWidth)),
+          onHorizontalDragEnd: (_) {
+            if (_drag != null) p.seek(at(_drag!));
+            setState(() => _drag = null);
+          },
+          child: SizedBox(
+            height: 12,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: ValueListenableBuilder<Duration>(
+                  valueListenable: p.position,
+                  builder: (context, pos, _) {
+                    final d = p.duration.value.inMilliseconds;
+                    final f = _drag != null
+                        ? _drag! / c.maxWidth
+                        : (d == 0 ? 0.0 : (pos.inMilliseconds / d).clamp(0.0, 1.0));
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      height: hover ? 5 : 2,
+                      color: Colors.white.withValues(alpha: 0.10),
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: f,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: Colors.white, boxShadow: [
+                            BoxShadow(color: Colors.white.withValues(alpha: 0.7), blurRadius: 10),
+                          ]),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (_hoverX != null || _drag != null)
+                Positioned(
+                  left: ((_drag ?? _hoverX!) - 24).clamp(0.0, c.maxWidth - 48),
+                  top: 10,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 48,
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                      child: Text(fmt(at(_drag ?? _hoverX!)),
+                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      );
+    });
   }
 }
 

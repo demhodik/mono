@@ -680,3 +680,97 @@ Future<void> showTrackMenu(BuildContext context, Offset pos, Track t) async {
       app.toggleLike(t);
   }
 }
+
+/// Yandex-style shelf: title, ← → arrows, horizontal row that scrolls by a page.
+class Shelf extends StatefulWidget {
+  final String title;
+  final VoidCallback? onMore;
+  final double height;
+  final double itemWidth;
+  final int count;
+  final Widget Function(int i) item;
+  const Shelf({
+    super.key,
+    required this.title,
+    required this.count,
+    required this.item,
+    this.onMore,
+    this.height = 280,
+    this.itemWidth = 196,
+  });
+
+  @override
+  State<Shelf> createState() => _ShelfState();
+}
+
+class _ShelfState extends State<Shelf> {
+  final _c = ScrollController();
+  bool _canBack = false, _canFwd = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _c.addListener(_sync);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+  }
+
+  void _sync() {
+    if (!_c.hasClients) return;
+    final b = _c.offset > 4, f = _c.offset < _c.position.maxScrollExtent - 4;
+    if (b != _canBack || f != _canFwd) {
+      setState(() {
+        _canBack = b;
+        _canFwd = f;
+      });
+    }
+  }
+
+  void _page(int dir) {
+    if (!_c.hasClients) return;
+    final w = _c.position.viewportDimension * 0.85;
+    _c.animateTo((_c.offset + dir * w).clamp(0, _c.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 520), curve: Curves.easeOutCubic);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(32, 26, 28, 8),
+        child: Row(children: [
+          Expanded(
+            child: MouseRegion(
+              cursor: widget.onMore != null ? SystemMouseCursors.click : MouseCursor.defer,
+              child: GestureDetector(
+                onTap: widget.onMore,
+                child: Text(widget.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.6)),
+              ),
+            ),
+          ),
+          GlassButton.icon(Icons.chevron_left_rounded, size: 22, pad: 5, onTap: _canBack ? () => _page(-1) : null),
+          const SizedBox(width: 8),
+          GlassButton.icon(Icons.chevron_right_rounded, size: 22, pad: 5, onTap: _canFwd ? () => _page(1) : null),
+        ]),
+      ),
+      SizedBox(
+        height: widget.height,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: ListView.builder(
+            controller: _c,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            itemCount: widget.count,
+            itemBuilder: (_, i) => SizedBox(width: widget.itemWidth, child: FadeSlideIn.index(i, child: widget.item(i))),
+          ),
+        ),
+      ),
+    ]);
+  }
+}

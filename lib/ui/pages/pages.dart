@@ -39,34 +39,44 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = app.api!;
     return LayoutBuilder(builder: (context, c) {
-      final heroH = (c.maxHeight * 0.78).clamp(440.0, 640.0);
+      final heroH = (c.maxHeight * 0.74).clamp(420.0, 620.0);
       return SmoothScrollView(slivers: [
         SliverToBoxAdapter(child: SizedBox(height: heroH, child: const WaveHero())),
-        if (app.history.isNotEmpty) ...[
-          SliverToBoxAdapter(child: SectionTitle('Недавно', onMore: () => app.go(PageKind.library))),
+        if (app.history.isNotEmpty)
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: 74,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                itemCount: app.history.length.clamp(0, 24),
-                itemBuilder: (_, i) => FadeSlideIn.index(i, child: _RecentChip(track: app.history[i])),
-              ),
+            child: Shelf(
+              title: 'Вы недавно слушали',
+              height: 76,
+              itemWidth: 250,
+              count: app.history.length.clamp(0, 30),
+              item: (i) => _RecentChip(track: app.history[i]),
             ),
           ),
-        ],
-        SliverToBoxAdapter(child: SectionTitle('Новые релизы', onMore: () => app.go(PageKind.releases))),
         SliverToBoxAdapter(
-          child: SizedBox(
-            height: 290,
-            child: Loader<List<Album>>(
-              load: api.newReleases,
-              builder: (context, albums) => ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                itemCount: albums.length.clamp(0, 20),
-                itemBuilder: (_, i) => SizedBox(width: 200, child: FadeSlideIn.index(i, child: _albumCard(albums[i]))),
+          child: Loader<List<Album>>(
+            load: api.newReleases,
+            builder: (context, albums) => Shelf(
+              title: 'Новые релизы',
+              onMore: () => app.go(PageKind.releases),
+              count: albums.length.clamp(0, 30),
+              item: (i) => _albumCard(albums[i]),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Loader<List<Track>>(
+            load: api.chart,
+            builder: (context, tracks) => Shelf(
+              title: 'Чарт',
+              onMore: () => app.go(PageKind.chart),
+              count: tracks.length.clamp(0, 30),
+              item: (i) => MediaCard(
+                image: tracks[i].coverOf(300),
+                title: '${i + 1}. ${tracks[i].title}',
+                subtitle: tracks[i].artists,
+                fallback: Icons.music_note_rounded,
+                onOpen: () => app.player.playList(tracks, i, source: 'chart'),
+                onPlay: () => app.player.playList(tracks, i, source: 'chart'),
               ),
             ),
           ),
@@ -77,12 +87,9 @@ class HomePage extends StatelessWidget {
   }
 }
 
-/// "Моя волна" like in Yandex Music: a big living 3D blob with play in the middle,
-/// mood chips under it and a one-line vibe request.
+/// "Моя волна" — Yandex-style: the 3D blob across the block, title + play + "Настроить" over it.
 class WaveHero extends StatelessWidget {
   const WaveHero({super.key});
-
-  static const _moods = {'all': 'Любое', 'active': 'Бодрое', 'fun': 'Весёлое', 'calm': 'Спокойное', 'sad': 'Грустное'};
 
   @override
   Widget build(BuildContext context) {
@@ -92,72 +99,158 @@ class WaveHero extends StatelessWidget {
         final p = app.player;
         final onWave = (p.source == 'wave' || p.source == 'vibe') && p.current != null;
         final playing = onWave && p.playing;
+        final label = p.source == 'vibe' && onWave
+            ? 'Подбор: ${app.vibeText}'
+            : (app.waveActivity != null ? 'Моя волна · ${AppState.activities[app.waveActivity]}' : 'Моя волна');
         return LayoutBuilder(builder: (context, c) {
-          final orb = (c.maxHeight - 210).clamp(240.0, 440.0);
-          return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            FadeSlideIn(
-              child: Text(p.source == 'vibe' && onWave ? 'Подбор: ${app.vibeText}' : 'Моя волна',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontFamily: 'Unbounded', fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.8)),
-            ),
-            SizedBox(
-              height: orb,
-              width: orb * 1.3,
+          final orb = (c.maxHeight - 120).clamp(260.0, 520.0);
+          return Column(children: [
+            Expanded(
               child: Stack(alignment: Alignment.center, children: [
                 Orb3D(size: orb, active: playing),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: onWave ? p.toggle : app.startWave,
-                    child: AnimatedScale(
-                      scale: playing ? 0.9 : 1,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeOutBack,
-                      child: Container(
-                        width: 78,
-                        height: 78,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.black.withValues(alpha: 0.35),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 24)],
-                        ),
-                        child: Center(child: PlayPauseIcon(playing: playing, size: 40, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              child: onWave
-                  ? Text('${p.current!.title} — ${p.current!.artists}',
-                      key: ValueKey(p.current!.id),
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: C.sub, fontSize: 14))
-                  : const Text('Бесконечный поток под твой вкус', key: ValueKey('idle'), style: TextStyle(color: C.sub, fontSize: 14)),
+                      style: TextStyle(
+                        fontFamily: 'Unbounded',
+                        fontSize: 40,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -1,
+                        shadows: [Shadow(color: Colors.black.withValues(alpha: 0.7), blurRadius: 30)],
+                      )),
+                  const SizedBox(height: 16),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    GlassButton(
+                      active: true,
+                      padding: const EdgeInsets.all(16),
+                      iconSize: 34,
+                      tooltip: playing ? 'Пауза' : 'Слушать',
+                      onTap: onWave ? p.toggle : app.startWave,
+                      child: PlayPauseIcon(playing: playing),
+                    ),
+                    const SizedBox(width: 12),
+                    GlassButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      onTap: () => showWaveSettings(context),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.tune_rounded, size: 19),
+                        SizedBox(width: 8),
+                        Text('Настроить'),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    child: onWave
+                        ? Text('${p.current!.title} — ${p.current!.artists}',
+                            key: ValueKey(p.current!.id),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: const Color(0xFFDADADA),
+                                fontSize: 14,
+                                shadows: [Shadow(color: Colors.black.withValues(alpha: 0.8), blurRadius: 14)]))
+                        : const SizedBox(height: 18),
+                  ),
+                ]),
+              ]),
             ),
-            const SizedBox(height: 14),
-            Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
-              for (final e in _moods.entries)
-                GlassButton(
-                  active: app.waveSettings.mood == e.key && p.source != 'vibe',
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                  onTap: () {
-                    app.waveSettings.mood = e.key;
-                    app.startWave();
-                  },
-                  child: Text(e.value, style: const TextStyle(fontSize: 13)),
-                ),
-            ]),
-            const SizedBox(height: 16),
             ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640), child: const VibeBox()),
+            const SizedBox(height: 10),
           ]);
         });
       },
+    );
+  }
+}
+
+/// Wave settings sheet (like Yandex): Занятие · Характер · Настроение · Язык.
+Future<void> showWaveSettings(BuildContext context) {
+  return showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Закрыть',
+    barrierColor: Colors.black.withValues(alpha: 0.55),
+    transitionDuration: const Duration(milliseconds: 380),
+    pageBuilder: (_, _, _) => const Center(child: _WaveSettingsPanel()),
+    transitionBuilder: (_, a, _, child) {
+      final c = CurvedAnimation(parent: a, curve: Curves.easeOutBack, reverseCurve: Curves.easeInCubic);
+      return FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(c), child: child));
+    },
+  );
+}
+
+class _WaveSettingsPanel extends StatelessWidget {
+  const _WaveSettingsPanel();
+
+  static const _div = {'favorite': 'Любимое', 'discover': 'Незнакомое', 'popular': 'Популярное'};
+  static const _mood = {'active': 'Бодрое', 'fun': 'Весёлое', 'calm': 'Спокойное', 'sad': 'Грустное'};
+  static const _lang = {'russian': 'Русский', 'not-russian': 'Иностранный', 'without-words': 'Без слов'};
+
+  Widget _group(String title, Map<String, String> m, String? value, void Function(String) pick) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontSize: 13, color: C.sub, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final e in m.entries)
+            GlassButton(
+              active: value == e.key,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              onTap: () => pick(e.key),
+              child: Text(e.value),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        width: 560,
+        decoration: BoxDecoration(
+          color: const Color(0xF0141414),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 60)],
+        ),
+        child: GlassPanel(
+          radius: 30,
+          opacity: 0.05,
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 6),
+          child: ListenableBuilder(
+            listenable: app,
+            builder: (context, _) {
+              final s = app.waveSettings;
+              void apply(void Function() f) {
+                f();
+                app.waveActivity = null;
+                app.startWave();
+              }
+
+              return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Expanded(
+                    child: Text('Настроить волну', style: TextStyle(fontFamily: 'Unbounded', fontSize: 22, fontWeight: FontWeight.w700)),
+                  ),
+                  HoverIcon(Icons.close_rounded, onTap: () => Navigator.of(context).pop()),
+                ]),
+                const SizedBox(height: 20),
+                _group('Под занятие', AppState.activities, app.waveActivity, (v) => app.setActivity(v)),
+                _group('По характеру', _div, s.diversity, (v) => apply(() => s.diversity = s.diversity == v ? 'default' : v)),
+                _group('Под настроение', _mood, s.mood, (v) => apply(() => s.mood = s.mood == v ? 'all' : v)),
+                _group('По языку', _lang, s.language, (v) => apply(() => s.language = s.language == v ? 'any' : v)),
+              ]);
+            },
+          ),
+        ),
+      ),
     );
   }
 }
@@ -773,43 +866,105 @@ class PlaylistPage extends StatelessWidget {
 
 // ======================= LIBRARY =======================
 
-class LibraryPage extends StatelessWidget {
+class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: app,
-      builder: (context, _) => SmoothScrollView(slivers: [
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(32, 18, 32, 8),
-            child: FadeSlideIn(
-              child: Text('Медиатека', style: TextStyle(fontFamily: 'Unbounded', fontSize: 34.0, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
+  State<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends State<LibraryPage> {
+  int _tab = 0;
+  static const _tabs = ['Треки', 'Альбомы', 'Исполнители', 'Плейлисты', 'История'];
+
+  Widget _body() {
+    final api = app.api!;
+    switch (_tab) {
+      case 0:
+        return Loader<List<Track>>(
+          key: const ValueKey('t'),
+          sliver: true,
+          load: api.likedTracks,
+          builder: (context, t) => TrackSliver(tracks: t, source: 'likes'),
+        );
+      case 1:
+        return Loader<List<Album>>(
+          key: const ValueKey('a'),
+          sliver: true,
+          load: api.likedAlbums,
+          builder: (context, a) => CardGrid(count: a.length, item: (i) => _albumCard(a[i])),
+        );
+      case 2:
+        return Loader<List<Artist>>(
+          key: const ValueKey('ar'),
+          sliver: true,
+          load: api.likedArtists,
+          builder: (context, a) => SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 180, mainAxisExtent: 196),
+              itemCount: a.length,
+              itemBuilder: (_, i) => FadeSlideIn.index(i, child: ArtistBubble(artist: a[i])),
             ),
           ),
-        ),
-        CardGrid(
+        );
+      case 3:
+        return CardGrid(
+          key: const ValueKey('p'),
           count: app.playlists.length + 1,
-          item: (i) {
-            if (i == 0) {
-              return MediaCard(
-                image: '',
-                fallback: Icons.favorite_rounded,
-                title: 'Мне нравится',
-                subtitle: plural(app.likedIds.length, 'трек', 'трека', 'треков'),
-                onOpen: () => app.go(PageKind.likes),
-              );
-            }
-            return _playlistCard(app.playlists[i - 1]);
-          },
+          item: (i) => i == 0
+              ? MediaCard(
+                  image: '',
+                  fallback: Icons.favorite_rounded,
+                  title: 'Мне нравится',
+                  subtitle: plural(app.likedIds.length, 'трек', 'трека', 'треков'),
+                  onOpen: () => app.go(PageKind.likes),
+                )
+              : _playlistCard(app.playlists[i - 1]),
+        );
+      default:
+        return TrackSliver(key: const ValueKey('h'), tracks: app.history, source: 'history');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SmoothScrollView(slivers: [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(32, 14, 32, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const FadeSlideIn(
+              child: Text('Коллекция', style: TextStyle(fontFamily: 'Unbounded', fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.8)),
+            ),
+            const SizedBox(height: 16),
+            _Tabs(tabs: _tabs, index: _tab, onPick: (i) => setState(() => _tab = i)),
+          ]),
         ),
-        if (app.history.isNotEmpty) ...[
-          const SliverToBoxAdapter(child: SectionTitle('Недавно слушал')),
-          TrackSliver(tracks: app.history.take(20).toList(), source: 'history'),
-        ],
-        const SliverToBoxAdapter(child: SizedBox(height: 140)),
-      ]),
-    );
+      ),
+      _body(),
+      const SliverToBoxAdapter(child: SizedBox(height: 40)),
+    ]);
+  }
+}
+
+/// Underlined text tabs with a sliding indicator.
+class _Tabs extends StatelessWidget {
+  final List<String> tabs;
+  final int index;
+  final void Function(int) onPick;
+  const _Tabs({required this.tabs, required this.index, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(spacing: 6, children: [
+      for (var i = 0; i < tabs.length; i++)
+        GlassButton(
+          active: i == index,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+          onTap: () => onPick(i),
+          child: Text(tabs[i]),
+        ),
+    ]);
   }
 }
 

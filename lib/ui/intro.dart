@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import 'widgets/background.dart';
+import 'widgets/orb3d.dart';
 
 /// Launch film (~2.8 s, click to skip):
 /// light particles spiral into the centre → the icon condenses out of blur and
@@ -80,40 +81,21 @@ class _IntroOverlayState extends State<IntroOverlay> with TickerProviderStateMix
                       opacity: (1 - out * 1.6).clamp(0.0, 1.0),
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         SizedBox(
-                          width: 460,
-                          height: 240,
+                          width: 520,
+                          height: 320,
                           child: Stack(alignment: Alignment.center, children: [
-                            Transform(
-                              alignment: Alignment.center,
-                              transform: Matrix4.identity()
-                                ..setEntry(3, 2, 0.0016)
-                                ..rotateX((1 - icon) * 1.15)
-                                ..rotateZ((1 - icon) * -0.25)
-                                ..scaleByDouble(0.5 + 0.5 * icon, 0.5 + 0.5 * icon, 1, 1),
+                            Transform.scale(
+                              scale: 0.2 + 0.8 * icon,
                               child: Opacity(
                                 opacity: sharp,
-                                child: ImageFiltered(
-                                  imageFilter: ImageFilter.blur(sigmaX: (1 - sharp) * 22, sigmaY: (1 - sharp) * 22),
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(36),
-                                      boxShadow: [
-                                        BoxShadow(color: Colors.white.withValues(alpha: 0.22 * sharp), blurRadius: 70),
-                                      ],
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(36),
-                                      child: Image.asset('assets/icon.png', width: 156, height: 156),
-                                    ),
-                                  ),
-                                ),
+                                child: const Orb3D(size: 300, active: true),
                               ),
                             ),
                             if (orbit > 0)
                               IgnorePointer(
                                 child: CustomPaint(
-                                  size: const Size(440, 230),
-                                  painter: OrbitPainter(_spark.value, reveal: orbit),
+                                  size: const Size(500, 260),
+                                  painter: OrbitPainter(_spark.value, reveal: orbit, tilt: -0.22),
                                 ),
                               ),
                           ]),
