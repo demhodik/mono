@@ -35,14 +35,14 @@ float env(vec3 r) {
   float box1 = exp(-pow(length(r.xy - vec2(-0.45 + uMouse.x * 0.3, 0.65 - uMouse.y * 0.3)) * 2.6, 2.0)) * 1.6;
   float box2 = exp(-pow(length(r.xy - vec2(0.85, 0.05)) * 3.2, 2.0)) * 0.9;
   float rim = exp(-pow((r.x + 0.95) * 5.0, 2.0)) * 0.6;
-  return 0.05 + 0.35 * sky + box1 + box2 + rim;
+  return 0.14 + 0.45 * sky + box1 + box2 + rim;
 }
 
 void main() {
   vec2 frag = FlutterFragCoord().xy;
   vec2 uv = (frag - 0.5 * uSize) / min(uSize.x, uSize.y) * 2.0;
   vec3 ro = vec3(0.0, 0.0, 2.6);
-  vec3 rd = normalize(vec3(uv * 0.62, -1.0));
+  vec3 rd = normalize(vec3(uv * 0.5, -1.0));
 
   float t = 0.0;
   float hit = 0.0;
@@ -56,7 +56,7 @@ void main() {
 
   // halo behind the blob
   float r = length(uv);
-  float glow = exp(-pow(max(r - 0.62, 0.0) * 2.4, 2.0)) * (0.16 + 0.14 * uEnergy);
+  float glow = exp(-pow(max(r - 0.55, 0.0) * 3.2, 2.0)) * (0.12 + 0.12 * uEnergy) * smoothstep(0.98, 0.7, r);
 
   if (hit < 0.5) {
     fragColor = vec4(vec3(1.0) * glow, glow);
