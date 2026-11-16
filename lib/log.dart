@@ -15,7 +15,6 @@ class Log {
 
   static void w(Object msg) {
     final line = '${DateTime.now().toIso8601String()}  $msg\n';
-    stdout.write(line);
     try {
       _file?.writeAsStringSync(line, mode: FileMode.append, flush: true);
     } catch (_) {}

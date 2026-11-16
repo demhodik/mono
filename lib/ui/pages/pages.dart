@@ -136,28 +136,36 @@ class WaveHero extends StatelessWidget {
             final onWave = p.source == 'wave' && p.current != null;
             return Stack(children: [
               Positioned(
-                right: -40,
-                top: -10,
-                bottom: -10,
-                width: 520,
+                right: 10,
+                top: 0,
+                bottom: 0,
+                width: 470,
                 child: Stack(alignment: Alignment.center, children: [
                   Container(
-                    width: 220,
-                    height: 220,
+                    width: 240,
+                    height: 240,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(colors: [
-                        Colors.white.withValues(alpha: onWave && p.playing ? 0.22 : 0.12),
+                        Colors.white.withValues(alpha: onWave && p.playing ? 0.20 : 0.10),
                         Colors.white.withValues(alpha: 0),
                       ]),
                     ),
                   ),
-                  const Orbit(width: 460, height: 230),
-                  Transform.rotate(
-                    angle: -0.32,
-                    child: const Orbit(width: 300, height: 150, period: Duration(milliseconds: 2600)),
+                  Tilt3D(
+                    radius: 26,
+                    maxAngle: 0.3,
+                    child: AnimatedScale(
+                      scale: onWave && p.playing ? 1.06 : 1,
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutBack,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: Image.asset('assets/icon.png', width: 124, height: 124),
+                      ),
+                    ),
                   ),
-                  EqBars(playing: onWave && p.playing, size: 46),
+                  const IgnorePointer(child: Orbit(width: 420, height: 200)),
                 ]),
               ),
               Padding(
