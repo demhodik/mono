@@ -30,6 +30,10 @@ class AppState extends ChangeNotifier {
 
   /// Flips to true when the launch animation hands over to the UI.
   final revealed = ValueNotifier<bool>(false);
+
+  /// The launch orb lands here (the "Моя волна" orb on the home screen).
+  final heroOrbKey = GlobalKey();
+  final introDone = ValueNotifier<bool>(false);
   final searchFocus = FocusNode();
 
   /// +1 = navigating forward, -1 = back (drives page transition direction).
@@ -278,11 +282,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final liked = await _loadLikedArtists();
-      final tracks = await VibeEngine.build(api!, plan, liked);
+      final (tracks, session) = await VibeEngine.start(api!, plan, liked);
       if (tracks.isEmpty) {
         toast('Ничего не нашлось под «$q», попробуй сказать иначе');
       } else {
-        final session = VibeSession(api!, plan, liked);
         await player.playList(tracks, 0, source: 'vibe', loadMore: session.more);
       }
     } catch (e) {

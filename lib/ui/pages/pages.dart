@@ -107,7 +107,12 @@ class WaveHero extends StatelessWidget {
           return Column(children: [
             Expanded(
               child: Stack(alignment: Alignment.center, children: [
-                Orb3D(size: orb, active: playing),
+                ValueListenableBuilder<bool>(
+                  valueListenable: app.introDone,
+                  builder: (context, done, child) =>
+                      AnimatedOpacity(opacity: done ? 1 : 0, duration: const Duration(milliseconds: 160), child: child),
+                  child: KeyedSubtree(key: app.heroOrbKey, child: Orb3D(size: orb, active: playing)),
+                ),
                 Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(label,
                       maxLines: 1,

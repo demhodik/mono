@@ -338,6 +338,23 @@ class YandexApi {
   }
 
   /// Next batch of wave tracks. Pass the last played id to continue the stream.
+  List<(String, String)>? _stations;
+
+  /// All radio stations Yandex offers: (id like "genre:rock", russian name).
+  Future<List<(String, String)>> stations() async {
+    if (_stations != null) return _stations!;
+    final r = await _get('/rotor/stations/list', {'language': 'ru'});
+    final out = <(String, String)>[];
+    for (final e in (r is List ? r : const [])) {
+      final st = e is Map ? e['station'] : null;
+      if (st is! Map) continue;
+      final id = st['id'];
+      final name = st['name']?.toString() ?? '';
+      if (id is Map && id['type'] != null && id['tag'] != null) out.add(('${id['type']}:${id['tag']}', name));
+    }
+    return _stations = out;
+  }
+
   Future<List<Track>> waveTracks({String? lastTrackId, String station = _wave}) async {
     final r = await _get('/rotor/station/$station/tracks', {
       'settings2': 'true',

@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import '../api/models.dart';
 import '../state/app_state.dart';
 import '../state/player.dart';
+import 'lyrics.dart';
 import 'pages/pages.dart';
 import 'theme.dart';
 import 'widgets/background.dart';
@@ -578,8 +579,76 @@ class NowPlayingOverlay extends StatelessWidget {
               size: 28, pad: 8, tooltip: 'Свернуть (Esc)', onTap: () => app.setNowPlaying(false)),
         ),
         const Positioned(top: 4, right: 0, child: _WindowButtons()),
-        const Padding(padding: EdgeInsets.fromLTRB(60, 70, 60, 50), child: Stage()),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(60, 70, 60, 50),
+          child: ListenableBuilder(
+            listenable: app,
+            builder: (context, _) => AnimatedSwitcher(
+              duration: const Duration(milliseconds: 450),
+              switchInCurve: Curves.easeOutCubic,
+              transitionBuilder: (c, a) => FadeTransition(
+                opacity: a,
+                child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(a), child: c),
+              ),
+              child: app.stageView == 1 ? const LyricsStage(key: ValueKey('ly')) : const Stage(key: ValueKey('st')),
+            ),
+          ),
+        ),
       ]),
+    );
+  }
+}
+
+/// Lyrics mode: just the words, centred and compact; small track line above, controls below.
+class LyricsStage extends StatelessWidget {
+  const LyricsStage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([app, app.player]),
+      builder: (context, _) {
+        final p = app.player;
+        final t = p.current;
+        if (t == null) return const SizedBox.shrink();
+        return Column(children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Cover(t.coverOf(120), size: 46, radius: 10),
+            const SizedBox(width: 12),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(t.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text(t.artists, style: const TextStyle(color: C.sub, fontSize: 13)),
+            ]),
+          ]),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720, maxHeight: 360),
+                child: LyricsView(key: ValueKey(t.id), track: t),
+              ),
+            ),
+          ),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            GlassButton.icon(Icons.skip_previous_rounded, size: 22, pad: 9, onTap: p.previous),
+            const SizedBox(width: 12),
+            GlassButton(active: true, padding: const EdgeInsets.all(13), iconSize: 30, onTap: p.toggle, child: PlayPauseIcon(playing: p.playing)),
+            const SizedBox(width: 12),
+            GlassButton.icon(Icons.skip_next_rounded, size: 22, pad: 9, onTap: p.next),
+            const SizedBox(width: 22),
+            const LyricsSyncControl(),
+            const SizedBox(width: 22),
+            GlassButton(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              onTap: () => app.setStageView(1),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.album_rounded, size: 17),
+                SizedBox(width: 7),
+                Text('Обложка'),
+              ]),
+            ),
+          ]),
+        ]);
+      },
     );
   }
 }

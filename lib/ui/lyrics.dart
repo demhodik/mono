@@ -48,8 +48,9 @@ class LyricsView extends StatelessWidget {
         if (l.isEmpty) return const SizedBox.shrink();
         if (!l.synced) {
           return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 60),
-            child: Text(l.plain, style: const TextStyle(fontSize: 20, height: 1.7, fontWeight: FontWeight.w600)),
+            padding: const EdgeInsets.symmetric(vertical: 30),
+            child: Text(l.plain,
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, height: 1.75, fontWeight: FontWeight.w600)),
           );
         }
         return _SyncedLyrics(lyrics: l);
@@ -92,7 +93,7 @@ class _SyncedLyricsState extends State<_SyncedLyrics> {
     final ctx = (i >= 0 ? _keys[i] : _keys.first).currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(ctx,
-          alignment: 0.38, duration: const Duration(milliseconds: 380), curve: Curves.easeOutCubic);
+          alignment: 0.5, duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
     }
   }
 
@@ -105,13 +106,13 @@ class _SyncedLyricsState extends State<_SyncedLyrics> {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
-        stops: [0, 0.14, 0.82, 1],
+        stops: [0, 0.3, 0.7, 1],
       ).createShader(r),
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 200),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          padding: const EdgeInsets.symmetric(vertical: 140),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
             for (var i = 0; i < lines.length; i++)
               _Line(
                 key: _keys[i],
@@ -142,7 +143,7 @@ class _LineState extends State<_Line> {
   @override
   Widget build(BuildContext context) {
     final cur = widget.state == 0;
-    final opacity = cur ? 1.0 : (_hover ? 0.75 : (widget.state < 0 ? 0.28 : (0.5 - widget.distance * 0.04).clamp(0.22, 0.5)));
+    final opacity = cur ? 1.0 : (_hover ? 0.75 : (0.45 - widget.distance * 0.08).clamp(0.12, 0.45));
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
@@ -150,10 +151,10 @@ class _LineState extends State<_Line> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          padding: const EdgeInsets.symmetric(vertical: 5),
           child: AnimatedScale(
-            scale: cur ? 1.0 : 0.94,
-            alignment: Alignment.centerLeft,
+            scale: cur ? 1.0 : 0.86,
+            alignment: Alignment.center,
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
             child: AnimatedOpacity(
@@ -161,12 +162,13 @@ class _LineState extends State<_Line> {
               duration: const Duration(milliseconds: 220),
               child: Text(
                 widget.text,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 30,
-                  height: 1.25,
+                  fontSize: 24,
+                  height: 1.3,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
-                  shadows: cur ? [Shadow(color: Colors.white.withValues(alpha: 0.45), blurRadius: 24)] : null,
+                  shadows: cur ? [Shadow(color: Colors.white.withValues(alpha: 0.35), blurRadius: 18)] : null,
                 ),
               ),
             ),
