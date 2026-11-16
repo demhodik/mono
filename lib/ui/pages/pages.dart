@@ -10,6 +10,9 @@ import '../widgets/common.dart';
 import '../widgets/coverflow.dart';
 import '../widgets/glass.dart';
 import '../widgets/motion.dart';
+import '../../state/player.dart';
+import '../lyrics.dart';
+import '../shell.dart' show StageProgress, UpNextRow;
 
 Widget _albumCard(Album a) => MediaCard(
       image: a.coverOf(300),
@@ -26,54 +29,424 @@ Widget _albumCard(Album a) => MediaCard(
       },
     );
 
-// ======================= HOME =======================
+// ======================= HOME · СЦЕНА =======================
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  String get _greeting {
-    final h = DateTime.now().hour;
-    if (h < 5) return 'Доброй ночи';
-    if (h < 12) return 'Доброе утро';
-    if (h < 18) return 'Добрый день';
-    return 'Добрый вечер';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final api = app.api!;
-    return SmoothScrollView(slivers: [
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 920),
-              child: FadeSlideIn(child: VibeBox(greeting: '$_greeting${api.displayName != null ? ', ${api.displayName}' : ''}')),
-            ),
+    return LayoutBuilder(builder: (context, c) {
+      final stageH = (c.maxHeight - 190).clamp(420.0, 760.0);
+      return SmoothScrollView(slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(40, 6, 40, 0),
+            child: SizedBox(height: stageH, child: const Stage()),
           ),
         ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 34, 32, 0),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
-              child: const FadeSlideIn(delay: Duration(milliseconds: 150), child: WaveSection()),
-            ),
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(40, 14, 40, 0),
+            child: FadeSlideIn(delay: Duration(milliseconds: 220), child: VibeBox()),
           ),
         ),
-      ),
-      const SliverToBoxAdapter(child: SizedBox(height: 140)),
-    ]);
+        if (app.history.isNotEmpty) ...[
+          const SliverToBoxAdapter(child: SectionTitle('Недавно')),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 74,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 36),
+                itemCount: app.history.length.clamp(0, 24),
+                itemBuilder: (_, i) => FadeSlideIn.index(i, child: _RecentChip(track: app.history[i])),
+              ),
+            ),
+          ),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 130)),
+      ]);
+    });
   }
 }
 
-/// The main thing on the home screen: describe a vibe -> music starts.
+class _RecentChip extends StatefulWidget {
+  final Track track;
+  const _RecentChip({required this.track});
+  @override
+  State<_RecentChip> createState() => _RecentChipState();
+}
+
+class _RecentChipState extends State<_RecentChip> {
+  bool _hover = false;
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.track;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: () => app.player.playList(app.history.toList(), app.history.indexOf(t), source: 'history'),
+        onSecondaryTapUp: (d) => showTrackMenu(context, d.globalPosition, t),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 230,
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          padding: const EdgeInsets.all(7),
+          transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: Colors.white.withValues(alpha: _hover ? 0.12 : 0.06),
+            border: Border.all(color: Colors.white.withValues(alpha: _hover ? 0.3 : 0.12)),
+          ),
+          child: Row(children: [
+            Cover(t.coverOf(100), size: 46, radius: 12),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                Text(t.artists, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.sub, fontSize: 12)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// The scene: big type on the left, a 3D card on the right (cover ⇄ lyrics ⇄ queue).
+/// With nothing playing it becomes "Моя волна".
+class Stage extends StatelessWidget {
+  const Stage({super.key});
+
+  static const _moods = {'all': 'Любое', 'active': 'Бодрое', 'fun': 'Весёлое', 'calm': 'Спокойное', 'sad': 'Грустное'};
+  static const _div = {'default': 'Обычно', 'favorite': 'Любимое', 'discover': 'Незнакомое', 'popular': 'Популярное'};
+
+  String _overline(String? src) {
+    if (src == null) return 'ИГРАЕТ СЕЙЧАС';
+    if (src == 'wave') return 'МОЯ ВОЛНА';
+    if (src == 'vibe') return 'ПОДБОР · ${app.vibeText.toUpperCase()}';
+    if (src.startsWith('radio:')) return 'ВОЛНА ПО ТРЕКУ';
+    if (src == 'likes') return 'МНЕ НРАВИТСЯ';
+    if (src == 'chart') return 'ЧАРТ';
+    if (src.startsWith('album:')) return 'АЛЬБОМ';
+    if (src.startsWith('playlist:')) return 'ПЛЕЙЛИСТ';
+    return 'ИГРАЕТ СЕЙЧАС';
+  }
+
+  Widget _chips(Map<String, String> m, String value, void Function(String) pick) => Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final e in m.entries)
+          GlassButton(
+            active: e.key == value,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+            onTap: () => pick(e.key),
+            child: Text(e.value, style: const TextStyle(fontSize: 12.5)),
+          ),
+      ]);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([app, app.player]),
+      builder: (context, _) {
+        final p = app.player;
+        final t = p.current;
+        final onWave = p.source == 'wave';
+        final s = app.waveSettings;
+        void setMood(String v) {
+          s.mood = v;
+          app.startWave();
+        }
+
+        void setDiv(String v) {
+          s.diversity = v;
+          app.startWave();
+        }
+
+        final left = t == null
+            ? Column(key: const ValueKey('idle'), mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('МОЯ ВОЛНА', style: TextStyle(fontSize: 12, letterSpacing: 3.5, color: C.sub, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 14),
+                const Text('Музыка,\nкоторая\nне кончается',
+                    style: TextStyle(fontFamily: 'Unbounded', fontSize: 54, fontWeight: FontWeight.w700, height: 1.02, letterSpacing: -1.6)),
+                const SizedBox(height: 16),
+                const Text('Подстраивается под каждый лайк и пропуск', style: TextStyle(color: C.sub, fontSize: 15)),
+                const SizedBox(height: 26),
+                GlassButton(
+                  active: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 15),
+                  iconSize: 26,
+                  onTap: app.startWave,
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.play_arrow_rounded),
+                    SizedBox(width: 8),
+                    Text('Запустить волну', style: TextStyle(fontSize: 15)),
+                  ]),
+                ),
+                const SizedBox(height: 22),
+                _chips(_moods, s.mood, setMood),
+                const SizedBox(height: 8),
+                _chips(_div, s.diversity, setDiv),
+              ])
+            : Column(key: const ValueKey('play'), mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  EqBars(playing: p.playing, size: 14),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(_overline(p.source),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, letterSpacing: 3.5, color: C.sub, fontWeight: FontWeight.w700)),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 520),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (c, a) => FadeTransition(
+                    opacity: a,
+                    child: SlideTransition(
+                      position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(a),
+                      child: c,
+                    ),
+                  ),
+                  layoutBuilder: (cur, prev) => Stack(alignment: Alignment.centerLeft, children: [...prev, if (cur != null) cur]),
+                  child: Column(
+                    key: ValueKey(t.id),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(t.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: 'Unbounded',
+                              fontSize: t.title.length > 34 ? 34 : (t.title.length > 18 ? 44 : 56),
+                              fontWeight: FontWeight.w700,
+                              height: 1.04,
+                              letterSpacing: -1.4)),
+                      const SizedBox(height: 12),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => app.openArtistOf(t),
+                          child: Text(t.artists, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Color(0xFFCFCFCF))),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const StageProgress(),
+                const SizedBox(height: 8),
+                Row(children: [
+                  HoverIcon(Icons.shuffle_rounded, size: 22, active: p.shuffle, onTap: p.toggleShuffle, tooltip: 'Перемешать'),
+                  const SizedBox(width: 10),
+                  GlassButton.icon(Icons.skip_previous_rounded, size: 26, pad: 11, onTap: p.previous),
+                  const SizedBox(width: 12),
+                  GlassButton(active: true, padding: const EdgeInsets.all(17), iconSize: 36, onTap: p.toggle, child: PlayPauseIcon(playing: p.playing)),
+                  const SizedBox(width: 12),
+                  GlassButton.icon(Icons.skip_next_rounded, size: 26, pad: 11, onTap: p.next),
+                  const SizedBox(width: 10),
+                  HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+                      size: 22, active: p.repeat != Repeat.off, onTap: p.cycleRepeat, tooltip: 'Повтор'),
+                  const SizedBox(width: 10),
+                  LikeButton(track: t, size: 24),
+                  HoverIcon(Icons.more_horiz_rounded, size: 22, tooltip: 'Ещё', onTap: () {
+                    final box = context.findRenderObject() as RenderBox;
+                    showTrackMenu(context, box.localToGlobal(Offset(120, box.size.height - 60)), t);
+                  }),
+                ]),
+                const SizedBox(height: 18),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  GlassButton(
+                    active: app.stageView == 1,
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    onTap: () => app.setStageView(1),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.lyrics_rounded, size: 17), SizedBox(width: 7), Text('Текст')]),
+                  ),
+                  GlassButton(
+                    active: app.stageView == 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    onTap: () => app.setStageView(2),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.queue_music_rounded, size: 17), SizedBox(width: 7), Text('Далее')]),
+                  ),
+                  GlassButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    onTap: () => app.startTrackWave(t),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.waves_rounded, size: 17), SizedBox(width: 7), Text('Волна по треку')]),
+                  ),
+                  GlassButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    tooltip: 'Текст поверх игры. Выход: Ctrl+Shift+L',
+                    onTap: app.overlay.enter,
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.subtitles_rounded, size: 17), SizedBox(width: 7), Text('Поверх игры')]),
+                  ),
+                  _SleepButton(),
+                ]),
+                if (onWave) ...[
+                  const SizedBox(height: 10),
+                  _chips(_moods, s.mood, setMood),
+                ],
+              ]);
+
+        return Row(children: [
+          Expanded(
+            flex: 6,
+            child: FadeSlideIn(
+              child: AnimatedSwitcher(duration: const Duration(milliseconds: 450), child: left),
+            ),
+          ),
+          const SizedBox(width: 30),
+          Expanded(
+            flex: 5,
+            child: FadeSlideIn(
+              delay: const Duration(milliseconds: 120),
+              dy: 40,
+              child: LayoutBuilder(builder: (context, c) {
+                final side = (c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight) - 20;
+                return Center(child: SizedBox(width: side, height: side, child: _StageCard(track: t, size: side)));
+              }),
+            ),
+          ),
+        ]);
+      },
+    );
+  }
+}
+
+class _SleepButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final p = app.player;
+    final at = p.sleepAt;
+    final label = at == null ? 'Сон' : '${at.difference(DateTime.now()).inMinutes + 1} мин';
+    return PopupMenuButton<int>(
+      tooltip: 'Остановить музыку через…',
+      offset: const Offset(0, 42),
+      onSelected: (m) => p.setSleep(m == 0 ? null : Duration(minutes: m)),
+      itemBuilder: (_) => [
+        for (final m in const [15, 30, 45, 60, 90]) PopupMenuItem(value: m, height: 40, child: Text('Через $m минут')),
+        if (at != null) const PopupMenuItem(value: 0, height: 40, child: Text('Выключить таймер')),
+      ],
+      child: IgnorePointer(
+        child: GlassButton(
+          active: at != null,
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+          onTap: () {},
+          child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.bedtime_rounded, size: 17), const SizedBox(width: 7), Text(label)]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Right side of the stage. Flips in 3D between cover / lyrics / queue.
+class _StageCard extends StatelessWidget {
+  final Track? track;
+  final double size;
+  const _StageCard({required this.track, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = track;
+    final view = t == null ? -1 : app.stageView;
+    Widget child;
+    if (t == null) {
+      child = GlassPanel(
+        key: const ValueKey('orb'),
+        radius: 36,
+        opacity: 0.06,
+        child: Center(child: WaveOrb(size: size * 0.82, active: false)),
+      );
+    } else if (view == 1) {
+      child = GlassPanel(
+        key: ValueKey('ly${t.id}'),
+        radius: 36,
+        opacity: 0.08,
+        blur: 30,
+        padding: const EdgeInsets.fromLTRB(28, 0, 20, 0),
+        child: LyricsView(track: t),
+      );
+    } else if (view == 2) {
+      final up = app.player.queue.skip(app.player.index + 1).take(40).toList();
+      child = GlassPanel(
+        key: const ValueKey('queue'),
+        radius: 36,
+        opacity: 0.08,
+        blur: 30,
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 8, bottom: 8),
+            child: Text('ДАЛЕЕ', style: TextStyle(fontSize: 12, letterSpacing: 3.5, color: C.sub, fontWeight: FontWeight.w700)),
+          ),
+          Expanded(
+            child: up.isEmpty
+                ? const Center(child: Text('Очередь пуста', style: TextStyle(color: C.sub)))
+                : ListView(children: [
+                    for (var i = 0; i < up.length; i++)
+                      UpNextRow(key: ValueKey(up[i].id), track: up[i], index: app.player.index + 1 + i),
+                  ]),
+          ),
+        ]),
+      );
+    } else {
+      child = KeyedSubtree(
+        key: const ValueKey('cover'),
+        child: Tilt3D(
+          maxAngle: 0.26,
+          radius: 36,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            switchInCurve: Curves.easeOutCubic,
+            transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(a), child: c)),
+            child: Container(
+              key: ValueKey(t.id),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(36),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.white.withValues(alpha: 0.22), Colors.white.withValues(alpha: 0.05)],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 60, offset: const Offset(0, 30))],
+              ),
+              child: Cover(t.coverOf(600), size: size - 22, radius: 27),
+            ),
+          ),
+        ),
+      );
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 620),
+      switchInCurve: const Interval(0.5, 1, curve: Curves.easeOutCubic),
+      switchOutCurve: const Interval(0.5, 1, curve: Curves.easeInCubic),
+      layoutBuilder: (cur, prev) => Stack(children: [...prev, if (cur != null) cur]),
+      transitionBuilder: (c, a) => AnimatedBuilder(
+        animation: a,
+        child: c,
+        builder: (context, w) => Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.0012)
+            ..rotateY((1 - a.value) * 1.5708),
+          child: Opacity(opacity: a.value < 0.02 ? 0 : 1, child: w),
+        ),
+      ),
+      child: SizedBox(key: child.key, width: size, height: size, child: child),
+    );
+  }
+}
+
+/// Compact vibe input: write a mood, music starts.
 class VibeBox extends StatefulWidget {
-  final String greeting;
-  const VibeBox({super.key, required this.greeting});
+  const VibeBox({super.key});
   @override
   State<VibeBox> createState() => _VibeBoxState();
 }
@@ -114,6 +487,7 @@ class _VibeBoxState extends State<VibeBox> {
   void _go([String? text]) {
     final t = text ?? _ctrl.text;
     if (text != null) _ctrl.text = text;
+    if (t.trim().isEmpty) return;
     app.vibe(t);
     _focus.unfocus();
   }
@@ -122,41 +496,25 @@ class _VibeBoxState extends State<VibeBox> {
   Widget build(BuildContext context) {
     final focused = _focus.hasFocus;
     return ListenableBuilder(
-      listenable: Listenable.merge([app, app.player]),
-      builder: (context, _) {
-        final p = app.player;
-        final playingVibe = p.source == 'vibe' && p.current != null;
-                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.greeting, style: const TextStyle(color: C.sub, fontSize: 15, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          const Text('Какой сегодня вайб?',
-              style: TextStyle(fontFamily: 'Unbounded', fontSize: 40, fontWeight: FontWeight.w700, letterSpacing: -1, height: 1.1)),
-          const SizedBox(height: 26),
-          // input capsule
-          AnimatedContainer(
+      listenable: app,
+      builder: (context, _) => Row(children: [
+        Expanded(
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            height: 76,
+            height: 56,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(38),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.white.withValues(alpha: focused ? 0.13 : 0.08),
-                  Colors.white.withValues(alpha: focused ? 0.06 : 0.03),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: focused ? 0.45 : 0.16)),
-              boxShadow: [
-                BoxShadow(color: Colors.white.withValues(alpha: focused ? 0.10 : 0.0), blurRadius: 50, spreadRadius: 2),
-                BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 30, offset: const Offset(0, 14)),
-              ],
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [
+                Colors.white.withValues(alpha: focused ? 0.15 : 0.09),
+                Colors.white.withValues(alpha: focused ? 0.06 : 0.03),
+              ]),
+              border: Border.all(color: Colors.white.withValues(alpha: focused ? 0.5 : 0.18)),
+              boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: focused ? 0.10 : 0), blurRadius: 40)],
             ),
-            padding: const EdgeInsets.only(left: 26, right: 10),
+            padding: const EdgeInsets.only(left: 20, right: 6),
             child: Row(children: [
-              Icon(Icons.auto_awesome_rounded, color: focused ? Colors.white : C.sub),
-              const SizedBox(width: 16),
+              Icon(Icons.auto_awesome_rounded, size: 20, color: focused ? Colors.white : C.sub),
+              const SizedBox(width: 12),
               Expanded(
                 child: Stack(alignment: Alignment.centerLeft, children: [
                   if (_ctrl.text.isEmpty)
@@ -165,176 +523,55 @@ class _VibeBoxState extends State<VibeBox> {
                         duration: const Duration(milliseconds: 450),
                         transitionBuilder: (c, a) => FadeTransition(
                           opacity: a,
-                          child: SlideTransition(
-                            position: Tween(begin: const Offset(0, 0.5), end: Offset.zero).animate(a),
-                            child: c,
-                          ),
+                          child: SlideTransition(position: Tween(begin: const Offset(0, 0.5), end: Offset.zero).animate(a), child: c),
                         ),
-                        child: Text('например, ${_examples[_hint]}',
-                            key: ValueKey(_hint), style: const TextStyle(color: C.dim, fontSize: 18)),
+                        child: Text('Какой вайб? Например, ${_examples[_hint]}',
+                            key: ValueKey(_hint), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.dim, fontSize: 15)),
                       ),
                     ),
                   TextField(
                     controller: _ctrl,
                     focusNode: _focus,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     decoration: const InputDecoration(border: InputBorder.none, isDense: true),
                     onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _go(),
                   ),
                 ]),
               ),
-              const SizedBox(width: 10),
               app.vibeBusy
-                  ? const Padding(padding: EdgeInsets.all(14), child: GlassSpinner(size: 28))
+                  ? const Padding(padding: EdgeInsets.all(12), child: GlassSpinner(size: 22))
                   : GlassButton(
                       active: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                       onTap: () => _go(),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Text('Подобрать', style: TextStyle(fontSize: 15)),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_rounded, size: 20),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('Подобрать'),
+                        SizedBox(width: 6),
+                        Icon(Icons.arrow_forward_rounded, size: 18),
                       ]),
                     ),
             ]),
           ),
-          const SizedBox(height: 18),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in _chips)
-              GlassButton(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                onTap: () => _go(c),
-                child: Text(c),
-              ),
-          ]),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOutCubic,
-            child: playingVibe && app.vibeText.isNotEmpty
-                ? Padding(
-                    padding: const EdgeInsets.only(top: 22),
-                    child: Row(children: [
-                      EqBars(playing: p.playing, size: 16),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text('Играет подбор «${app.vibeText}»',
-                            maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                      for (final t in app.vibeTags.take(4))
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(99),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                          ),
-                          child: Text(t, style: const TextStyle(fontSize: 12, color: C.sub)),
-                        ),
-                    ]),
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-        ]);
-      },
-    );
-  }
-}
-
-/// "Моя волна" on the home screen: a living orb + controls, no card.
-class WaveSection extends StatelessWidget {
-  const WaveSection({super.key});
-
-  static const _moods = {'all': 'Любое', 'active': 'Бодрое', 'fun': 'Весёлое', 'calm': 'Спокойное', 'sad': 'Грустное'};
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([app, app.player]),
-      builder: (context, _) {
-        final p = app.player;
-        final onWave = p.source == 'wave' && p.current != null;
-        final playing = onWave && p.playing;
-        return Row(children: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: onWave ? p.toggle : app.startWave,
-              child: Stack(alignment: Alignment.center, children: [
-                WaveOrb(size: 330, active: playing),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Icon(
-                    playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    key: ValueKey(playing),
-                    size: 54,
-                    color: Colors.black.withValues(alpha: 0.85),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final c in _chips)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GlassButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    onTap: () => _go(c),
+                    child: Text(c, style: const TextStyle(fontSize: 13)),
                   ),
                 ),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 30),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('МОЯ ВОЛНА',
-                  style: TextStyle(fontSize: 12, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                child: onWave
-                    ? Column(
-                        key: ValueKey(p.current!.id),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(p.current!.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontFamily: 'Unbounded', fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
-                          const SizedBox(height: 6),
-                          Text(p.current!.artists, style: const TextStyle(color: C.sub, fontSize: 16)),
-                        ],
-                      )
-                    : const Text('Бесконечный поток\nпод твой вкус',
-                        key: ValueKey('idle'),
-                        style: TextStyle(fontFamily: 'Unbounded', fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
-              ),
-              const SizedBox(height: 22),
-              Row(children: [
-                GlassButton(
-                  active: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-                  iconSize: 24,
-                  onTap: onWave ? p.toggle : app.startWave,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    PlayPauseIcon(playing: playing),
-                    const SizedBox(width: 8),
-                    Text(onWave ? (playing ? 'Пауза' : 'Продолжить') : 'Слушать'),
-                  ]),
-                ),
-                if (onWave) ...[
-                  const SizedBox(width: 10),
-                  GlassButton.icon(Icons.skip_next_rounded, size: 22, pad: 12, tooltip: 'Дальше', onTap: p.next),
-                ],
-              ]),
-              const SizedBox(height: 22),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final e in _moods.entries)
-                  GlassButton(
-                    active: app.waveSettings.mood == e.key,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    onTap: () {
-                      app.waveSettings.mood = e.key;
-                      app.startWave();
-                    },
-                    child: Text(e.value, style: const TextStyle(fontSize: 13)),
-                  ),
-              ]),
             ]),
           ),
-        ]);
-      },
+        ),
+      ]),
     );
   }
 }

@@ -5,8 +5,6 @@ import 'package:window_manager/window_manager.dart';
 
 import '../api/models.dart';
 import '../state/app_state.dart';
-import '../state/player.dart';
-import 'lyrics.dart';
 import 'pages/pages.dart';
 import 'theme.dart';
 import 'widgets/background.dart';
@@ -22,76 +20,50 @@ class Shell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: LiquidBackground(
+      body: StageBackground(
         child: Stack(children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 14, 0, 14),
-              child: Entrance(from: Offset(-90, 0), child: Dock()),
-            ),
+          Column(children: [
+            const Entrance(from: Offset(0, -50), child: TopBar()),
             Expanded(
-              child: Column(children: [
-                const Entrance(from: Offset(0, -60), delayMs: 90, child: TopBar()),
-                Expanded(
-                  child: Entrance(
-                    from: const Offset(0, 40),
-                    delayMs: 180,
-                    child: ListenableBuilder(
-                      listenable: app,
-                      builder: (context, _) {
-                        final r = app.route;
-                        final dir = app.navDir.toDouble();
-                        return AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 460),
-                          reverseDuration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, anim) {
-                            final incoming = child.key == ObjectKey(r);
-                            final slide = Tween<Offset>(
-                              begin: Offset(incoming ? 0.05 * dir : -0.05 * dir, 0),
+              child: Entrance(
+                from: const Offset(0, 40),
+                delayMs: 120,
+                child: ListenableBuilder(
+                  listenable: app,
+                  builder: (context, _) {
+                    final r = app.route;
+                    final dir = app.navDir.toDouble();
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 480),
+                      reverseDuration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, anim) {
+                        final incoming = child.key == ObjectKey(r);
+                        return FadeTransition(
+                          opacity: anim,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: Offset(incoming ? 0.04 * dir : -0.04 * dir, 0),
                               end: Offset.zero,
-                            ).animate(anim);
-                            return FadeTransition(
-                              opacity: anim,
-                              child: SlideTransition(position: slide, child: child),
-                            );
-                          },
-                          child: KeyedSubtree(key: ObjectKey(r), child: RepaintBoundary(child: _page(r))),
+                            ).animate(anim),
+                            child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(anim), child: child),
+                          ),
                         );
                       },
-                    ),
-                  ),
+                      child: KeyedSubtree(key: ObjectKey(r), child: RepaintBoundary(child: _page(r))),
+                    );
+                  },
                 ),
-              ]),
+              ),
             ),
           ]),
           const Positioned(
-            left: 100,
-            right: 14,
-            bottom: 16,
+            left: 16,
+            right: 16,
+            bottom: 14,
             child: Center(
-              child: Entrance(from: Offset(0, 130), delayMs: 300, curve: Curves.easeOutBack, child: PlayerIsland()),
-            ),
-          ),
-          ListenableBuilder(
-            listenable: app,
-            builder: (context, _) => AnimatedSwitcher(
-              duration: const Duration(milliseconds: 560),
-              reverseDuration: const Duration(milliseconds: 320),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(
-                  alignment: const Alignment(0, 0.9),
-                  scale: Tween(begin: 0.9, end: 1.0).animate(anim),
-                  child: child,
-                ),
-              ),
-              child: app.nowPlaying && app.player.current != null
-                  ? const NowPlayingView(key: ValueKey('np'))
-                  : const SizedBox.shrink(key: ValueKey('none')),
+              child: Entrance(from: Offset(0, 110), delayMs: 260, curve: Curves.easeOutBack, child: BottomBar()),
             ),
           ),
         ]),
@@ -125,94 +97,181 @@ class Shell extends StatelessWidget {
   }
 }
 
-// ======================= DOCK =======================
+// ======================= BOTTOM GLASS CAPSULE =======================
 
-class Dock extends StatelessWidget {
-  const Dock({super.key});
+/// One floating glass capsule: mini player · navigation · like + volume.
+class BottomBar extends StatelessWidget {
+  const BottomBar({super.key});
 
-  static const items = <(PageKind, IconData, String)>[
-    (PageKind.home, Icons.home_rounded, 'Главная'),
-    (PageKind.wave, Icons.waves_rounded, 'Моя волна'),
+  static const tabs = <(PageKind, IconData, String)>[
+    (PageKind.home, Icons.graphic_eq_rounded, 'Сцена'),
     (PageKind.search, Icons.search_rounded, 'Поиск'),
     (PageKind.library, Icons.library_music_rounded, 'Медиатека'),
-    (PageKind.likes, Icons.favorite_rounded, 'Мне нравится'),
+    (PageKind.likes, Icons.favorite_rounded, 'Любимое'),
     (PageKind.releases, Icons.auto_awesome_rounded, 'Новинки'),
     (PageKind.chart, Icons.trending_up_rounded, 'Чарт'),
+    (PageKind.wave, Icons.tune_rounded, 'Волна'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 74,
-      child: GlassPanel(
-        radius: 37,
-        opacity: 0.05,
-        child: ListenableBuilder(
-          listenable: app,
-          builder: (context, _) {
-            final kind = app.route.kind;
-            var sel = items.indexWhere((e) => e.$1 == kind);
-            if (kind == PageKind.playlist || kind == PageKind.album) sel = 3;
-            const itemH = 58.0;
-            return Column(children: [
-              const SizedBox(height: 18),
-              SizedBox(
-                height: itemH * items.length,
-                child: Stack(children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeOutBack,
-                    top: sel < 0 ? -itemH : sel * itemH + 3,
-                    left: 11,
-                    child: AnimatedOpacity(
-                      opacity: sel < 0 ? 0 : 1,
-                      duration: const Duration(milliseconds: 200),
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xF5FFFFFF), Color(0xD0CFCFCF)],
-                          ),
-                          boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.25), blurRadius: 22)],
+    return ListenableBuilder(
+      listenable: Listenable.merge([app, app.player]),
+      builder: (context, _) {
+        final p = app.player;
+        final t = p.current;
+        final w = MediaQuery.sizeOf(context).width;
+        final wide = w > 1250;
+        var kind = app.route.kind;
+        if (kind == PageKind.playlist || kind == PageKind.album || kind == PageKind.artist) kind = PageKind.library;
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: SizedBox(
+            height: 66,
+            child: GlassPanel(
+              radius: 33,
+              opacity: 0.10,
+              blur: 30,
+              child: Stack(children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  child: Row(children: [
+                    // ---- mini player ----
+                    Expanded(
+                      child: t == null
+                          ? const Padding(
+                              padding: EdgeInsets.only(left: 12),
+                              child: Text('Включи что-нибудь', style: TextStyle(color: C.sub, fontSize: 13)),
+                            )
+                          : MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => app.go(PageKind.home),
+                                onSecondaryTapUp: (d) => showTrackMenu(context, d.globalPosition, t),
+                                child: Row(children: [
+                                  Vinyl(cover: t.coverOf(200), size: 48, spinning: p.playing),
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 380),
+                                      transitionBuilder: (c, a) => FadeTransition(
+                                        opacity: a,
+                                        child: SlideTransition(
+                                          position: Tween(begin: const Offset(0, 0.6), end: Offset.zero).animate(a),
+                                          child: c,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        key: ValueKey(t.id),
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(t.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                                          const SizedBox(height: 2),
+                                          Text(t.artists,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(color: C.sub, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ]),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 6),
+                    GlassButton.icon(Icons.skip_previous_rounded, size: 20, pad: 8, onTap: t == null ? null : p.previous),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 46,
+                      height: 46,
+                      child: Center(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: p.loading
+                              ? const GlassSpinner(key: ValueKey('l'), size: 22)
+                              : GlassButton(
+                                  key: const ValueKey('b'),
+                                  active: true,
+                                  padding: const EdgeInsets.all(10),
+                                  iconSize: 26,
+                                  onTap: t == null ? app.startWave : p.toggle,
+                                  child: PlayPauseIcon(playing: p.playing),
+                                ),
                         ),
                       ),
                     ),
-                  ),
-                  Column(children: [
-                    for (var i = 0; i < items.length; i++)
-                      _DockItem(icon: items[i].$2, label: items[i].$3, active: i == sel, onTap: () => app.go(items[i].$1)),
+                    const SizedBox(width: 6),
+                    GlassButton.icon(Icons.skip_next_rounded, size: 20, pad: 8, onTap: t == null ? null : p.next),
+                    if (t != null) LikeButton(track: t, size: 19),
+                    _sep(),
+                    // ---- navigation ----
+                    for (final tab in tabs)
+                      _NavTab(
+                        icon: tab.$2,
+                        label: tab.$3,
+                        active: kind == tab.$1,
+                        showLabel: wide || kind == tab.$1,
+                        onTap: () => app.go(tab.$1),
+                      ),
+                    _sep(),
+                    // ---- volume ----
+                    HoverIcon(
+                      p.volume == 0
+                          ? Icons.volume_off_rounded
+                          : (p.volume < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
+                      size: 19,
+                      onTap: p.toggleMute,
+                    ),
+                    SizedBox(
+                      width: 86,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(trackHeight: 3),
+                        child: Slider(value: p.volume, min: 0, max: 100, onChanged: p.setVolume),
+                      ),
+                    ),
                   ]),
-                ]),
-              ),
-              const Spacer(),
-              const _AccountButton(),
-              const SizedBox(height: 16),
-            ]);
-          },
-        ),
-      ),
+                ),
+                if (t != null) const Positioned(left: 34, right: 34, top: 0, child: _CapsuleProgress()),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
+
+  static Widget _sep() => Container(
+        width: 1,
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        color: Colors.white.withValues(alpha: 0.12),
+      );
 }
 
-class _DockItem extends StatefulWidget {
+class _NavTab extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool active;
+  final bool showLabel;
   final VoidCallback onTap;
-  const _DockItem({required this.icon, required this.label, required this.active, required this.onTap});
+  const _NavTab(
+      {required this.icon, required this.label, required this.active, required this.showLabel, required this.onTap});
   @override
-  State<_DockItem> createState() => _DockItemState();
+  State<_NavTab> createState() => _NavTabState();
 }
 
-class _DockItemState extends State<_DockItem> {
+class _NavTabState extends State<_NavTab> {
   bool _hover = false;
   @override
   Widget build(BuildContext context) {
+    final a = widget.active;
+    final fg = a ? Colors.black : (_hover ? Colors.white : const Color(0xFFB0B0B0));
     return Tooltip(
       message: widget.label,
       child: MouseRegion(
@@ -221,25 +280,120 @@ class _DockItemState extends State<_DockItem> {
         onExit: (_) => setState(() => _hover = false),
         child: GestureDetector(
           onTap: widget.onTap,
-          child: SizedBox(
-            height: 58,
-            width: 74,
-            child: Center(
-              child: AnimatedScale(
-                scale: _hover && !widget.active ? 1.18 : 1,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: Icon(
-                  widget.icon,
-                  size: 24,
-                  color: widget.active ? Colors.black : (_hover ? Colors.white : const Color(0xFF8E8E8E)),
-                ),
-              ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic,
+            height: 44,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: EdgeInsets.symmetric(horizontal: widget.showLabel ? 14 : 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: a
+                  ? const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xF7FFFFFF), Color(0xD9D6D6D6)],
+                    )
+                  : null,
+              color: a ? null : Colors.white.withValues(alpha: _hover ? 0.08 : 0),
+              boxShadow: a ? [BoxShadow(color: Colors.white.withValues(alpha: 0.22), blurRadius: 18)] : null,
+            ),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 380),
+              curve: Curves.easeOutCubic,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(widget.icon, size: 20, color: fg),
+                if (widget.showLabel) ...[
+                  const SizedBox(width: 8),
+                  Text(widget.label, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+                ],
+              ]),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// Seek line along the top edge of the capsule; thickens and shows a time bubble on hover.
+class _CapsuleProgress extends StatefulWidget {
+  const _CapsuleProgress();
+  @override
+  State<_CapsuleProgress> createState() => _CapsuleProgressState();
+}
+
+class _CapsuleProgressState extends State<_CapsuleProgress> {
+  double? _hoverX;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = app.player;
+    return LayoutBuilder(builder: (context, c) {
+      Duration at(double x) => p.duration.value * (x / c.maxWidth).clamp(0.0, 1.0);
+      final hover = _hoverX != null;
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onHover: (e) => setState(() => _hoverX = e.localPosition.dx),
+        onExit: (_) => setState(() => _hoverX = null),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (e) => p.seek(at(e.localPosition.dx)),
+          onHorizontalDragUpdate: (e) => p.seek(at(e.localPosition.dx)),
+          child: SizedBox(
+            height: 12,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: ValueListenableBuilder<Duration>(
+                  valueListenable: p.position,
+                  builder: (context, pos, _) {
+                    final d = p.duration.value.inMilliseconds;
+                    final f = d == 0 ? 0.0 : (pos.inMilliseconds / d).clamp(0.0, 1.0);
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      height: hover ? 4 : 2,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: f,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(3),
+                            boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 8)],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (hover)
+                Positioned(
+                  left: (_hoverX! - 24).clamp(0.0, c.maxWidth - 48),
+                  bottom: 14,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 48,
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                      child: Text(fmt(at(_hoverX!)),
+                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      );
+    });
   }
 }
 
@@ -251,7 +405,7 @@ class _AccountButton extends StatelessWidget {
     return PopupMenuButton<String>(
       tooltip: name,
       color: const Color(0xFF1C1C1C),
-      offset: const Offset(70, -60),
+      offset: const Offset(0, 44),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
@@ -266,8 +420,8 @@ class _AccountButton extends StatelessWidget {
         const PopupMenuItem(value: 'logout', child: Text('Выйти')),
       ],
       child: Container(
-        width: 42,
-        height: 42,
+        width: 34,
+        height: 34,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
@@ -320,11 +474,11 @@ class _TopBarState extends State<TopBar> {
   Widget build(BuildContext context) {
     final focused = _focus.hasFocus;
     return SizedBox(
-      height: 72,
+      height: 58,
       child: Stack(children: [
         const Positioned.fill(child: DragToMoveArea(child: SizedBox.expand())),
         Padding(
-          padding: const EdgeInsets.only(left: 24, top: 6),
+          padding: const EdgeInsets.only(left: 18, top: 4),
           child: Row(children: [
             ListenableBuilder(
               listenable: app,
@@ -340,8 +494,8 @@ class _TopBarState extends State<TopBar> {
             AnimatedContainer(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
-              width: focused ? 520 : 380,
-              height: 46,
+              width: focused ? 480 : 340,
+              height: 40,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(999),
                 child: BackdropFilter(
@@ -389,6 +543,8 @@ class _TopBarState extends State<TopBar> {
               ),
             ),
             const Spacer(),
+            const _AccountButton(),
+            const SizedBox(width: 14),
             const _WindowButtons(),
           ]),
         ),
@@ -461,508 +617,15 @@ class _WinBtnState extends State<_WinBtn> {
   }
 }
 
-// ======================= PLAYER ISLAND =======================
-
-class PlayerIsland extends StatelessWidget {
-  const PlayerIsland({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([app, app.player]),
-      builder: (context, _) {
-        final p = app.player;
-        final t = p.current;
-        final has = t != null;
-        final maxW = MediaQuery.sizeOf(context).width - 130;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 620),
-          curve: Curves.easeOutBack,
-          width: has ? (maxW < 960 ? maxW : 960) : 340,
-          height: 80,
-          child: GlassPanel(
-            radius: 40,
-            opacity: 0.09,
-            blur: 24,
-            child: Stack(children: [
-              if (!has)
-                const Center(
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    EqBars(playing: false, size: 16, color: C.sub),
-                    SizedBox(width: 12),
-                    Text('Выбери, что послушать', style: TextStyle(color: C.sub)),
-                  ]),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 18, 0),
-                  child: Row(children: [
-                    Expanded(
-                      flex: 5,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => app.setNowPlaying(true),
-                          onSecondaryTapUp: (d) => showTrackMenu(context, d.globalPosition, t),
-                          child: Row(children: [
-                            Vinyl(cover: t.coverOf(200), size: 58, spinning: p.playing),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 380),
-                                switchInCurve: Curves.easeOutCubic,
-                                transitionBuilder: (c, a) => FadeTransition(
-                                  opacity: a,
-                                  child: SlideTransition(
-                                    position: Tween(begin: const Offset(0, 0.6), end: Offset.zero).animate(a),
-                                    child: c,
-                                  ),
-                                ),
-                                child: Column(
-                                  key: ValueKey(t.id),
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(t.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                                    const SizedBox(height: 3),
-                                    Text(t.artists,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: C.sub, fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ]),
-                        ),
-                      ),
-                    ),
-                    HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                        active: p.repeat != Repeat.off, onTap: p.cycleRepeat, tooltip: 'Повтор'),
-                    const SizedBox(width: 6),
-                    HoverIcon(Icons.shuffle_rounded, active: p.shuffle, onTap: p.toggleShuffle, tooltip: 'Перемешать'),
-                    const SizedBox(width: 8),
-                    GlassButton.icon(Icons.skip_previous_rounded, size: 22, pad: 8, onTap: p.previous),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: p.loading
-                              ? const GlassSpinner(key: ValueKey('l'), size: 26)
-                              : GlassButton(
-                                  key: const ValueKey('b'),
-                                  active: true,
-                                  padding: const EdgeInsets.all(11),
-                                  iconSize: 28,
-                                  onTap: p.toggle,
-                                  child: PlayPauseIcon(playing: p.playing),
-                                ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    GlassButton.icon(Icons.skip_next_rounded, size: 22, pad: 8, onTap: p.next),
-                    const SizedBox(width: 6),
-                    LikeButton(track: t),
-                    const SizedBox(width: 10),
-                    HoverIcon(
-                      p.volume == 0
-                          ? Icons.volume_off_rounded
-                          : (p.volume < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
-                      onTap: p.toggleMute,
-                    ),
-                    SizedBox(
-                      width: 96,
-                      child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(trackHeight: 3),
-                        child: Slider(value: p.volume, min: 0, max: 100, onChanged: p.setVolume),
-                      ),
-                    ),
-                    HoverIcon(Icons.lyrics_rounded, size: 20, tooltip: 'Текст', onTap: () {
-                      app.setLyricsTab(true);
-                      app.setNowPlaying(true);
-                    }),
-                    HoverIcon(Icons.subtitles_rounded,
-                        size: 20, tooltip: 'Текст поверх игр (Ctrl+Shift+L)', onTap: app.overlay.enter),
-                    HoverIcon(Icons.open_in_full_rounded,
-                        size: 18, onTap: () => app.setNowPlaying(true), tooltip: 'Развернуть (F)'),
-                  ]),
-                ),
-              if (has) const Positioned(left: 40, right: 40, bottom: 0, child: _IslandProgress()),
-            ]),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Seek line at the bottom of the island: grows and shows a time bubble on hover.
-class _IslandProgress extends StatefulWidget {
-  const _IslandProgress();
-  @override
-  State<_IslandProgress> createState() => _IslandProgressState();
-}
-
-class _IslandProgressState extends State<_IslandProgress> {
-  double? _hoverX;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = app.player;
-    return LayoutBuilder(builder: (context, c) {
-      Duration at(double x) => p.duration.value * (x / c.maxWidth).clamp(0.0, 1.0);
-      void seekTo(double x) {
-        if (p.duration.value == Duration.zero) return;
-        p.seek(at(x));
-      }
-
-      final hover = _hoverX != null;
-      return MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onHover: (e) => setState(() => _hoverX = e.localPosition.dx),
-        onExit: (_) => setState(() => _hoverX = null),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (e) => seekTo(e.localPosition.dx),
-          onHorizontalDragUpdate: (e) => seekTo(e.localPosition.dx),
-          child: SizedBox(
-            height: 14,
-            child: Stack(clipBehavior: Clip.none, children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: ValueListenableBuilder<Duration>(
-                  valueListenable: p.position,
-                  builder: (context, pos, _) {
-                    final d = p.duration.value.inMilliseconds;
-                    final f = d == 0 ? 0.0 : (pos.inMilliseconds / d).clamp(0.0, 1.0);
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      height: hover ? 5 : 2,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: f,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(3),
-                            boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.7), blurRadius: 8)],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (hover)
-                Positioned(
-                  left: (_hoverX! - 24).clamp(0.0, c.maxWidth - 48),
-                  bottom: 12,
-                  child: IgnorePointer(
-                    child: Container(
-                      width: 48,
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(fmt(at(_hoverX!)),
-                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-        ),
-      );
-    });
-  }
-}
-
-// ======================= NOW PLAYING =======================
-
-class NowPlayingView extends StatelessWidget {
-  const NowPlayingView({super.key});
-
-  static String _sleepLabel(DateTime? at) {
-    if (at == null) return 'Таймер сна';
-    final m = at.difference(DateTime.now()).inMinutes + 1;
-    return 'Сон через $m мин';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([app, app.player]),
-      builder: (context, _) {
-        final p = app.player;
-        final t = p.current;
-        if (t == null) return const SizedBox.shrink();
-        final upNext = p.queue.skip(p.index + 1).take(40).toList();
-        return Stack(fit: StackFit.expand, children: [
-          // cheap ambient backdrop: tiny cover stretched + blurred once
-          ColoredBox(
-            color: Colors.black,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 900),
-              child: RepaintBoundary(
-                key: ValueKey(t.id),
-                child: t.cover == null
-                    ? const SizedBox.expand()
-                    : ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36, tileMode: TileMode.mirror),
-                        child: ColorFiltered(
-                          colorFilter: const ColorFilter.matrix(<double>[
-                            0.2126, 0.7152, 0.0722, 0, 0, //
-                            0.2126, 0.7152, 0.0722, 0, 0, //
-                            0.2126, 0.7152, 0.0722, 0, 0, //
-                            0, 0, 0, 0.5, 0,
-                          ]),
-                          child: SizedBox.expand(
-                            child: Image.network(t.coverOf(50),
-                                fit: BoxFit.cover,
-                                filterQuality: FilterQuality.medium,
-                                errorBuilder: (_, _, _) => const SizedBox()),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x40000000), Color(0xB3000000)],
-              ),
-            ),
-          ),
-          const Positioned(left: 0, right: 0, top: 0, height: 60, child: DragToMoveArea(child: SizedBox.expand())),
-          Positioned(
-            top: 18,
-            left: 24,
-            child: GlassButton.icon(Icons.keyboard_arrow_down_rounded,
-                size: 28, pad: 8, tooltip: 'Свернуть (Esc)', onTap: () => app.setNowPlaying(false)),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(70, 70, 70, 40),
-            child: Row(children: [
-              Expanded(
-                flex: 5,
-                child: Center(
-                  child: FadeSlideIn(
-                    dy: 40,
-                    duration: const Duration(milliseconds: 800),
-                    child: FittedBox(
-                      child: Tilt3D(
-                      maxAngle: 0.32,
-                      radius: 999,
-                      glare: false,
-                      child: SizedBox(
-                        width: 460,
-                        height: 440,
-                        child: Stack(alignment: Alignment.center, children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 700),
-                            width: 440,
-                            height: 440,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(colors: [
-                                Colors.white.withValues(alpha: p.playing ? 0.16 : 0.05),
-                                Colors.white.withValues(alpha: 0),
-                              ]),
-                            ),
-                          ),
-                          AnimatedScale(
-                            scale: p.playing ? 1 : 0.94,
-                            duration: const Duration(milliseconds: 700),
-                            curve: Curves.easeOutBack,
-                            child: Vinyl(cover: t.coverOf(400), size: 380, spinning: p.playing),
-                          ),
-                          Positioned(right: 0, top: 0, child: Tonearm(length: 300, playing: p.playing)),
-                        ]),
-                      ),
-                    ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 40),
-              Expanded(
-                flex: 6,
-                child: FadeSlideIn(
-                  delay: const Duration(milliseconds: 120),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('СЕЙЧАС ИГРАЕТ',
-                        style: TextStyle(fontSize: 11, letterSpacing: 3, color: C.sub, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 10),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      switchInCurve: Curves.easeOutCubic,
-                      transitionBuilder: (c, a) => FadeTransition(
-                        opacity: a,
-                        child: SlideTransition(
-                          position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a),
-                          child: c,
-                        ),
-                      ),
-                      layoutBuilder: (cur, prev) =>
-                          Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
-                      child: Column(
-                        key: ValueKey(t.id),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontFamily: 'Unbounded',
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.8,
-                                  height: 1.1)),
-                          const SizedBox(height: 8),
-                          MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: () => app.openArtistOf(t),
-                              child: Text(t.artists, style: const TextStyle(fontSize: 17, color: C.sub)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const _BigProgress(),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      HoverIcon(Icons.shuffle_rounded, size: 24, active: p.shuffle, onTap: p.toggleShuffle),
-                      const SizedBox(width: 14),
-                      GlassButton.icon(Icons.skip_previous_rounded, size: 28, pad: 11, onTap: p.previous),
-                      const SizedBox(width: 14),
-                      GlassButton(
-                        active: true,
-                        padding: const EdgeInsets.all(16),
-                        iconSize: 36,
-                        onTap: p.toggle,
-                        child: PlayPauseIcon(playing: p.playing),
-                      ),
-                      const SizedBox(width: 14),
-                      GlassButton.icon(Icons.skip_next_rounded, size: 28, pad: 11, onTap: p.next),
-                      const SizedBox(width: 14),
-                      HoverIcon(p.repeat == Repeat.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                          size: 24, active: p.repeat != Repeat.off, onTap: p.cycleRepeat),
-                      const Spacer(),
-                      HoverIcon(Icons.waves_rounded,
-                          size: 22, tooltip: 'Волна по этому треку', onTap: () => app.startTrackWave(t)),
-                      const SizedBox(width: 4),
-                      LikeButton(track: t, size: 24),
-                    ]),
-                    const SizedBox(height: 22),
-                    Row(children: [
-                      GlassButton(
-                        active: app.lyricsTab,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                        onTap: () => app.setLyricsTab(true),
-                        child: const Text('Текст'),
-                      ),
-                      const SizedBox(width: 8),
-                      GlassButton(
-                        active: !app.lyricsTab,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                        onTap: () => app.setLyricsTab(false),
-                        child: const Text('Далее'),
-                      ),
-                      const Spacer(),
-                      if (app.lyricsTab) ...[const LyricsSyncControl(), const SizedBox(width: 12)],
-                      PopupMenuButton<int>(
-                        tooltip: 'Остановить музыку через…',
-                        offset: const Offset(0, 44),
-                        onSelected: (m) => p.setSleep(m == 0 ? null : Duration(minutes: m)),
-                        itemBuilder: (_) => [
-                          for (final m in const [15, 30, 45, 60, 90])
-                            PopupMenuItem(value: m, height: 40, child: Text('Через $m минут')),
-                          if (p.sleepAt != null) const PopupMenuItem(value: 0, height: 40, child: Text('Выключить таймер')),
-                        ],
-                        child: IgnorePointer(
-                          child: GlassButton(
-                            active: p.sleepAt != null,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            onTap: () {},
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.bedtime_rounded, size: 17),
-                              const SizedBox(width: 7),
-                              Text(_sleepLabel(p.sleepAt)),
-                            ]),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GlassButton(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        tooltip: 'Текст поверх игры. Выход: Ctrl+Shift+L',
-                        onTap: app.overlay.enter,
-                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.subtitles_rounded, size: 18),
-                          SizedBox(width: 7),
-                          Text('Поверх игры'),
-                        ]),
-                      ),
-                    ]),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 350),
-                        child: app.lyricsTab
-                            ? LyricsView(key: ValueKey('ly${t.id}'), track: t)
-                            : ListView(key: const ValueKey('queue'), children: [
-                                if (upNext.isEmpty)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 30),
-                                    child: Text('Очередь пуста', style: TextStyle(color: C.sub)),
-                                  ),
-                                for (var i = 0; i < upNext.length; i++)
-                                  _UpNextRow(
-                                      key: ValueKey(upNext[i].id), track: upNext[i], index: p.index + 1 + i),
-                              ]),
-                      ),
-                    ),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-        ]);
-      },
-    );
-  }
-}
-
-class _UpNextRow extends StatefulWidget {
+class UpNextRow extends StatefulWidget {
   final Track track;
   final int index;
-  const _UpNextRow({super.key, required this.track, required this.index});
+  const UpNextRow({super.key, required this.track, required this.index});
   @override
-  State<_UpNextRow> createState() => _UpNextRowState();
+  State<UpNextRow> createState() => UpNextRowState();
 }
 
-class _UpNextRowState extends State<_UpNextRow> {
+class UpNextRowState extends State<UpNextRow> {
   bool _hover = false;
   @override
   Widget build(BuildContext context) {
@@ -1002,13 +665,13 @@ class _UpNextRowState extends State<_UpNextRow> {
   }
 }
 
-class _BigProgress extends StatefulWidget {
-  const _BigProgress();
+class StageProgress extends StatefulWidget {
+  const StageProgress();
   @override
-  State<_BigProgress> createState() => _BigProgressState();
+  State<StageProgress> createState() => StageProgressState();
 }
 
-class _BigProgressState extends State<_BigProgress> {
+class StageProgressState extends State<StageProgress> {
   double? _drag;
 
   @override

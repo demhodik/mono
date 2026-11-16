@@ -69,6 +69,7 @@ class AppState extends ChangeNotifier {
   Duration get lyricsTime => player.position.value + Duration(milliseconds: lyricsOffset);
   void setLyricsTab(bool v) {
     lyricsTab = v;
+    stageView = v ? 1 : 2;
     notifyListeners();
   }
 
@@ -88,10 +89,17 @@ class AppState extends ChangeNotifier {
   String searchQuery = '';
 
   /// Full-screen "now playing" view.
+  /// Kept for compatibility: the "now playing" view is the home stage now.
   bool nowPlaying = false;
   void setNowPlaying(bool v) {
-    if (nowPlaying == v) return;
-    nowPlaying = v;
+    if (v) go(PageKind.home);
+  }
+
+  /// What the stage card on the home screen shows: 0 cover, 1 lyrics, 2 queue.
+  int stageView = 0;
+  void setStageView(int v) {
+    stageView = stageView == v ? 0 : v;
+    if (route.kind != PageKind.home) go(PageKind.home);
     notifyListeners();
   }
 

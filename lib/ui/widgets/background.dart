@@ -1,6 +1,10 @@
 import 'dart:math' as math;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+
+import '../../state/app_state.dart';
 
 /// Pure black with one soft beam of light from the top. Static = zero cost.
 class LiquidBackground extends StatelessWidget {
@@ -258,4 +262,102 @@ class _OrbPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OrbPainter o) => o.t != t || o.e != e;
+}
+
+/// "Scene" backdrop: the current cover, huge, blurred and greyscale, crossfading
+/// on track change; soft grey light when nothing plays. Rasterised once per cover.
+class StageBackground extends StatelessWidget {
+  final Widget child;
+  const StageBackground({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(fit: StackFit.expand, children: [
+      const ColoredBox(color: Colors.black),
+      const IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _LightPainter()))),
+      IgnorePointer(
+        child: ListenableBuilder(
+          listenable: app.player,
+          builder: (context, _) {
+            final url = app.player.current?.coverOf(80) ?? '';
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 1400),
+              switchInCurve: Curves.easeOut,
+              child: url.isEmpty
+                  ? const SizedBox.expand(key: ValueKey('none'))
+                  : _BlurredCover(key: ValueKey(url), url: url),
+            );
+          },
+        ),
+      ),
+      // dim + vignette so glass and text stay readable
+      const IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0.3, -0.4),
+              radius: 1.25,
+              colors: [Color(0x80000000), Color(0xE6000000)],
+            ),
+          ),
+        ),
+      ),
+      child,
+    ]);
+  }
+}
+
+/// Blurs a small cover ONCE into a bitmap, then just stretches it — zero per-frame cost.
+class _BlurredCover extends StatefulWidget {
+  final String url;
+  const _BlurredCover({super.key, required this.url});
+  @override
+  State<_BlurredCover> createState() => _BlurredCoverState();
+}
+
+class _BlurredCoverState extends State<_BlurredCover> {
+  ui.Image? _img;
+  ImageStream? _stream;
+  late final ImageStreamListener _listener = ImageStreamListener((info, _) => _bake(info.image), onError: (_, _) {});
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = NetworkImage(widget.url).resolve(ImageConfiguration.empty)..addListener(_listener);
+  }
+
+  Future<void> _bake(ui.Image src) async {
+    const n = 96.0;
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec, const Rect.fromLTWH(0, 0, n, n));
+    final paint = Paint()
+      ..filterQuality = FilterQuality.medium
+      ..imageFilter = ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7, tileMode: TileMode.mirror)
+      ..colorFilter = const ColorFilter.matrix(<double>[
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0, 0, 0, 1, 0,
+      ]);
+    canvas.drawImageRect(
+        src, Rect.fromLTWH(0, 0, src.width.toDouble(), src.height.toDouble()), const Rect.fromLTWH(-8, -8, n + 16, n + 16), paint);
+    final img = await rec.endRecording().toImage(n.toInt(), n.toInt());
+    if (!mounted) {
+      img.dispose();
+      return;
+    }
+    setState(() => _img = img);
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    _img?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox.expand(
+        child: _img == null ? const SizedBox() : RawImage(image: _img, fit: BoxFit.cover, filterQuality: FilterQuality.high),
+      );
 }
