@@ -45,15 +45,7 @@ class LyricsView extends StatelessWidget {
     return LyricsLoader(
       track: track,
       builder: (context, l) {
-        if (l.isEmpty) {
-          return const Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.lyrics_outlined, size: 40, color: C.dim),
-              SizedBox(height: 10),
-              Text('У этого трека нет текста', style: TextStyle(color: C.sub)),
-            ]),
-          );
-        }
+        if (l.isEmpty) return const SizedBox.shrink();
         if (!l.synced) {
           return SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 60),
@@ -185,7 +177,8 @@ class _LineState extends State<_Line> {
   }
 }
 
-/// Game overlay: dark glass capsule at the top, current line fills white like karaoke.
+/// Game overlay: frameless outlined text at the top; the current line fills like karaoke.
+/// Shows nothing at all when the track has no synced lyrics.
 class OverlayLyrics extends StatelessWidget {
   const OverlayLyrics({super.key});
 
@@ -195,99 +188,106 @@ class OverlayLyrics extends StatelessWidget {
       listenable: app.player,
       builder: (context, _) {
         final t = app.player.current;
-        return Container(
-          constraints: const BoxConstraints(minWidth: 420, maxWidth: 1060),
-          padding: const EdgeInsets.fromLTRB(30, 14, 30, 16),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.62),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-          ),
-          child: t == null
-              ? const Text('Mono · ничего не играет', style: TextStyle(color: Colors.white70, fontSize: 18))
-              : LyricsLoader(
-                  key: ValueKey(t.id),
-                  track: t,
-                  loading: const _OverlayHeader(text: 'Ищу текст…'),
-                  builder: (context, l) {
-                    if (!l.synced) {
-                      return _OverlayHeader(
-                          text: l.isEmpty ? '${t.title} — ${t.artists} · текста нет' : '${t.title} — текст без тайминга');
-                    }
-                    return ListenableBuilder(
-                      listenable: Listenable.merge([app.player.position, app]),
-                      builder: (context, _) {
-                        final now = app.lyricsTime;
-                        final i = l.indexAt(now);
-                        final cur = i >= 0 ? l.lines[i] : null;
-                        final next = i + 1 < l.lines.length ? l.lines[i + 1] : null;
-                        double fill = 0;
-                        if (cur != null) {
-                          final end = next?.time ?? cur.time + const Duration(seconds: 4);
-                          final span = (end - cur.time).inMilliseconds.clamp(300, 20000);
-                          // fill over ~85% of the gap so it finishes before the next line
-                          fill = ((now - cur.time).inMilliseconds / (span * 0.85)).clamp(0.0, 1.0);
-                        }
-                        final curText = (cur == null || cur.text.isEmpty) ? '♪' : cur.text;
-                        return Column(mainAxisSize: MainAxisSize.min, children: [
-                          _OverlayHeader(text: '${t.title} — ${t.artists}'),
-                          const SizedBox(height: 6),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            transitionBuilder: (c, a) => FadeTransition(
-                              opacity: a,
-                              child: SlideTransition(
-                                position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a),
-                                child: c,
-                              ),
-                            ),
-                            child: ShaderMask(
-                              key: ValueKey('c$i'),
-                              blendMode: BlendMode.srcIn,
-                              shaderCallback: (r) => LinearGradient(
-                                colors: const [Colors.white, Colors.white, Color(0x73FFFFFF), Color(0x73FFFFFF)],
-                                stops: [0, fill, fill, 1],
-                              ).createShader(r),
-                              child: Text(curText,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, height: 1.2)),
-                            ),
-                          ),
-                          if (next != null && next.text.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(next.text,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.5))),
-                          ],
-                        ]);
-                      },
-                    );
-                  },
-                ),
+        if (t == null) return const SizedBox.shrink();
+        return LyricsLoader(
+          key: ValueKey(t.id),
+          track: t,
+          loading: const SizedBox.shrink(),
+          builder: (context, l) {
+            if (!l.synced) return const SizedBox.shrink();
+            return ListenableBuilder(
+              listenable: Listenable.merge([app.player.position, app]),
+              builder: (context, _) {
+                final now = app.lyricsTime;
+                final i = l.indexAt(now);
+                if (i < 0) return const SizedBox.shrink();
+                final cur = l.lines[i];
+                final next = i + 1 < l.lines.length ? l.lines[i + 1] : null;
+                final end = next?.time ?? cur.time + const Duration(seconds: 4);
+                final span = (end - cur.time).inMilliseconds.clamp(300, 20000);
+                final fill = ((now - cur.time).inMilliseconds / (span * 0.85)).clamp(0.0, 1.0);
+                if (cur.text.isEmpty) return const SizedBox.shrink();
+                return Column(mainAxisSize: MainAxisSize.min, children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    transitionBuilder: (c, a) => FadeTransition(
+                      opacity: a,
+                      child: SlideTransition(
+                        position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a),
+                        child: c,
+                      ),
+                    ),
+                    child: _KaraokeLine(key: ValueKey('c$i'), text: cur.text, fill: fill, size: 38),
+                  ),
+                  if (next != null && next.text.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    _Outlined(next.text, size: 22, alpha: 0.6),
+                  ],
+                ]);
+              },
+            );
+          },
         );
       },
     );
   }
 }
 
-class _OverlayHeader extends StatelessWidget {
+/// Outlined line with a left-to-right white fill over a grey base.
+class _KaraokeLine extends StatelessWidget {
   final String text;
-  const _OverlayHeader({required this.text});
+  final double fill;
+  final double size;
+  const _KaraokeLine({super.key, required this.text, required this.fill, required this.size});
+
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.graphic_eq_rounded, size: 14, color: Colors.white.withValues(alpha: 0.55)),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.55), fontWeight: FontWeight.w600)),
-        ),
-      ]);
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: size, fontWeight: FontWeight.w800, height: 1.2);
+    return Stack(children: [
+      _Outlined(text, size: size, alpha: 0.0, strokeOnly: true),
+      ShaderMask(
+        blendMode: BlendMode.srcIn,
+        shaderCallback: (r) => LinearGradient(
+          colors: const [Colors.white, Colors.white, Color(0x99FFFFFF), Color(0x99FFFFFF)],
+          stops: [0, fill, fill, 1],
+        ).createShader(r),
+        child: Text(text, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: style),
+      ),
+    ]);
+  }
+}
+
+class _Outlined extends StatelessWidget {
+  final String text;
+  final double size;
+  final double alpha;
+  final bool strokeOnly;
+  const _Outlined(this.text, {required this.size, this.alpha = 1, this.strokeOnly = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: size, fontWeight: FontWeight.w800, height: 1.2);
+    return Stack(children: [
+      Text(text,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: style.copyWith(
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = size * 0.18
+              ..strokeJoin = StrokeJoin.round
+              ..color = Colors.black.withValues(alpha: 0.9),
+            shadows: [Shadow(color: Colors.black.withValues(alpha: 0.7), blurRadius: 14)],
+          )),
+      if (!strokeOnly)
+        Text(text,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: style.copyWith(color: Colors.white.withValues(alpha: alpha))),
+    ]);
+  }
 }
 
 /// Small control to nudge lyrics timing.
