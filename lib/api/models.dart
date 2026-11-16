@@ -1,0 +1,127 @@
+String? coverUrl(String? uri, [int size = 400]) {
+  if (uri == null || uri.isEmpty) return null;
+  final u = uri.replaceAll('%%', '${size}x$size');
+  return u.startsWith('http') ? u : 'https://$u';
+}
+
+String _artists(dynamic list) {
+  if (list is! List) return '';
+  return list
+      .map((a) => (a is Map ? a['name'] : null)?.toString() ?? '')
+      .where((s) => s.isNotEmpty)
+      .join(', ');
+}
+
+class Track {
+  final String id;
+  final String title;
+  final String artists;
+  final String? albumId;
+  final String? cover;
+  final Duration duration;
+  final bool available;
+
+  Track({
+    required this.id,
+    required this.title,
+    required this.artists,
+    this.albumId,
+    this.cover,
+    this.duration = Duration.zero,
+    this.available = true,
+  });
+
+  String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
+
+  static Track? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    final id = j['id']?.toString();
+    if (id == null) return null;
+    final albums = j['albums'];
+    String? albumId;
+    String? cover = j['coverUri']?.toString();
+    if (albums is List && albums.isNotEmpty && albums.first is Map) {
+      albumId = albums.first['id']?.toString();
+      cover ??= albums.first['coverUri']?.toString();
+    }
+    var title = j['title']?.toString() ?? 'Без названия';
+    final version = j['version']?.toString();
+    if (version != null && version.isNotEmpty) title = '$title ($version)';
+    return Track(
+      id: id,
+      title: title,
+      artists: _artists(j['artists']),
+      albumId: albumId,
+      cover: cover ?? j['ogImage']?.toString(),
+      duration: Duration(milliseconds: (j['durationMs'] as num?)?.toInt() ?? 0),
+      available: j['available'] != false,
+    );
+  }
+
+  /// Full id used by some endpoints: "trackId:albumId".
+  String get fullId => albumId == null ? id : '$id:$albumId';
+}
+
+class Album {
+  final String id;
+  final String title;
+  final String artists;
+  final String? cover;
+  final int? year;
+
+  Album({required this.id, required this.title, required this.artists, this.cover, this.year});
+
+  String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
+
+  static Album? fromJson(dynamic j) {
+    if (j is! Map || j['id'] == null) return null;
+    return Album(
+      id: j['id'].toString(),
+      title: j['title']?.toString() ?? '',
+      artists: _artists(j['artists']),
+      cover: j['coverUri']?.toString(),
+      year: (j['year'] as num?)?.toInt(),
+    );
+  }
+}
+
+class Playlist {
+  final String kind;
+  final String owner;
+  final String title;
+  final int trackCount;
+  final String? cover;
+
+  Playlist({required this.kind, required this.owner, required this.title, required this.trackCount, this.cover});
+
+  String coverOf([int size = 400]) => coverUrl(cover, size) ?? '';
+
+  static Playlist? fromJson(dynamic j) {
+    if (j is! Map || j['kind'] == null) return null;
+    String? cover;
+    final c = j['cover'];
+    if (c is Map) {
+      cover = c['uri']?.toString();
+      final items = c['itemsUri'];
+      if (cover == null && items is List && items.isNotEmpty) cover = items.first.toString();
+    }
+    cover ??= j['ogImage']?.toString();
+    final owner = j['owner'] is Map ? j['owner']['uid']?.toString() : null;
+    return Playlist(
+      kind: j['kind'].toString(),
+      owner: owner ?? j['uid']?.toString() ?? '',
+      title: j['title']?.toString() ?? '',
+      trackCount: (j['trackCount'] as num?)?.toInt() ?? 0,
+      cover: cover,
+    );
+  }
+}
+
+/// Settings of "Моя волна".
+class WaveSettings {
+  String mood; // all, active, fun, calm, sad
+  String diversity; // default, favorite, discover, popular
+  String language; // any, russian, not-russian
+
+  WaveSettings({this.mood = 'all', this.diversity = 'default', this.language = 'any'});
+}

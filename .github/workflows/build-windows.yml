@@ -1,0 +1,43 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.50.0
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      - name: Pack
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Mono-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mono-windows-x64
+          path: build/windows/x64/runner/Release/
+
+      - name: Publish "latest" release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Mono-windows-x64.zip \
+            --title "Mono — последняя сборка" \
+            --notes "Сборка из коммита ${GITHUB_SHA::7}. Распакуй архив и запусти mono.exe."
