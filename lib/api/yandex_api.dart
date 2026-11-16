@@ -163,8 +163,8 @@ class YandexApi {
     return ArtistInfo(a, _tracks(r['popularTracks']), albums);
   }
 
-  Future<List<Playlist>> searchPlaylists(String text) async {
-    final r = await _get('/search', {'text': text, 'type': 'playlist', 'page': '0', 'nocorrect': 'false'});
+  Future<List<Playlist>> searchPlaylists(String text, {int page = 0}) async {
+    final r = await _get('/search', {'text': text, 'type': 'playlist', 'page': '$page', 'nocorrect': 'false'});
     final pl = r is Map ? r['playlists'] : null;
     final res = pl is Map ? pl['results'] : null;
     return (res is List ? res : const []).map(Playlist.fromJson).whereType<Playlist>().toList();

@@ -270,8 +270,8 @@ class AppState extends ChangeNotifier {
       if (tracks.isEmpty) {
         toast('Ничего не нашлось под «$q», попробуй сказать иначе');
       } else {
-        await player.playList(tracks, 0,
-            source: 'vibe', loadMore: (last) => api!.waveTracks(lastTrackId: last.id));
+        final session = VibeSession(api!, plan, liked);
+        await player.playList(tracks, 0, source: 'vibe', loadMore: session.more);
       }
     } catch (e) {
       toast('Не получилось подобрать: $e');

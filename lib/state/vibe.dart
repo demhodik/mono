@@ -147,3 +147,49 @@ class VibeEngine {
     return out;
   }
 }
+
+/// Keeps a vibe going forever: every call digs into the next page of themed
+/// playlists (rotating through all understood queries), mixed with the tuned wave.
+class VibeSession {
+  final YandexApi api;
+  final VibePlan plan;
+  final Set<String> liked;
+  final _seenPlaylists = <String>{};
+  int _round = 0;
+
+  VibeSession(this.api, this.plan, this.liked);
+
+  Future<List<Track>> more(Track last) async {
+    final rnd = math.Random();
+    final queries = plan.queries.toSet().toList();
+    final out = <Track>[];
+    // try a few query/page combos until something new turns up
+    for (var attempt = 0; attempt < 4 && out.length < 15 && queries.isNotEmpty; attempt++) {
+      final q = queries[_round % queries.length];
+      final page = _round ~/ queries.length;
+      _round++;
+      try {
+        final pls = (await api.searchPlaylists(q, page: page))
+            .where((p) => _seenPlaylists.add('${p.owner}:${p.kind}'))
+            .take(2)
+            .toList();
+        for (final p in pls) {
+          final tracks = (await api.playlistTracks(p)).where((t) => t.available).toList()..shuffle(rnd);
+          tracks.sort((a, b) {
+            final ka = a.artists.toLowerCase().split(', ').any(liked.contains) ? 0 : 1;
+            final kb = b.artists.toLowerCase().split(', ').any(liked.contains) ? 0 : 1;
+            return ka.compareTo(kb);
+          });
+          out.addAll(tracks.take(12));
+        }
+      } catch (_) {}
+    }
+    try {
+      final wave = await api.waveTracks(station: 'track:${last.id}');
+      for (var i = 0; i < wave.length; i++) {
+        out.insert(math.min(out.length, i * 3 + 2), wave[i]);
+      }
+    } catch (_) {}
+    return out;
+  }
+}

@@ -156,9 +156,21 @@ class PlayerController extends ChangeNotifier {
       loading = true;
       notifyListeners();
       try {
-        final more = await _loadMore!(t);
         final known = queue.map((e) => e.id).toSet();
-        final fresh = more.where((e) => !known.contains(e.id)).toList();
+        var fresh = <Track>[];
+        // 1) the source's own continuation, 2) radio around recent tracks
+        final seeds = [t, ...queue.reversed.skip(1).take(6).toList()..shuffle()];
+        for (var attempt = 0; attempt < 4 && fresh.isEmpty; attempt++) {
+          List<Track> more;
+          try {
+            more = attempt == 0
+                ? await _loadMore!(t)
+                : await app.api!.waveTracks(station: 'track:${seeds[(attempt - 1) % seeds.length].id}');
+          } catch (_) {
+            more = const [];
+          }
+          fresh = more.where((e) => e.available && !known.contains(e.id)).toList();
+        }
         if (fresh.isNotEmpty) {
           queue.addAll(fresh);
           _ordered.addAll(fresh);
