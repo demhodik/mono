@@ -32,8 +32,6 @@ class GameOverlay extends ChangeNotifier {
       Log.w('hotkey: $e');
     }
   }
-    }
-  }
 
   Future<void> toggle() => active ? exit() : enter();
 
